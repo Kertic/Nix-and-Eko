@@ -11,7 +11,7 @@ namespace NixAndEko.Util
     [RequireComponent(typeof(SpriteRenderer))]
     public class ProceduralSprite : MonoBehaviour
     {
-        public enum Shape { Tile, Target, Arrow, Circle }
+        public enum Shape { Tile, Target, Arrow, Circle, Earth, GrassCap, Plank, Runestone, CrystalWall, Thorn, Shrine }
 
         public Shape shape = Shape.Tile;
         public Color primary = new Color(0.35f, 0.55f, 0.85f);
@@ -22,6 +22,9 @@ namespace NixAndEko.Util
         [Range(0.05f, 1f)]
         [Tooltip("Stroke width of the Circle shape, as a fraction of its radius.")]
         public float circleThickness = 0.22f;
+
+        [Tooltip("Varies the dithering of generated tiles.")]
+        public int seed = 7;
 
         [Tooltip("If both > 0, draws the tile in Tiled mode at this world size (repeats the sprite).")]
         public Vector2 tiledSize = Vector2.zero;
@@ -41,6 +44,13 @@ namespace NixAndEko.Util
             {
                 Shape.Target => SpriteFactory.Target(primary, secondary, Mathf.Max(4, pixelsX)),
                 Shape.Circle => SpriteFactory.Circle(primary, Mathf.Max(4, pixelsX), circleThickness),
+                Shape.Earth => TileArt.EarthTile(seed),
+                Shape.GrassCap => TileArt.GrassCap(seed),
+                Shape.Plank => TileArt.PlankTile(seed),
+                Shape.Runestone => TileArt.RunestoneTile(seed),
+                Shape.CrystalWall => TileArt.CrystalTile(seed),
+                Shape.Thorn => TileArt.ThornTile(seed),
+                Shape.Shrine => TileArt.ShrineTile(seed),
                 Shape.Arrow => SpriteFactory.Arrow(primary, secondary, Mathf.Max(6, pixelsX), Mathf.Max(3, pixelsY)),
                 _ => SpriteFactory.SolidRect(primary, Mathf.Max(2, pixelsX), Mathf.Max(2, pixelsY), secondary),
             };
@@ -55,7 +65,7 @@ namespace NixAndEko.Util
 
             _sr.sprite = sprite;
 
-            if (shape == Shape.Tile && tiledSize.x > 0f && tiledSize.y > 0f)
+            if (tiledSize.x > 0f && tiledSize.y > 0f && shape != Shape.Target && shape != Shape.Arrow && shape != Shape.Circle)
             {
                 _sr.drawMode = SpriteDrawMode.Tiled;
                 _sr.size = tiledSize;

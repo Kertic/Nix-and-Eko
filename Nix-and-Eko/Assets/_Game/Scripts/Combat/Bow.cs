@@ -51,6 +51,10 @@ namespace NixAndEko.Combat
         [Tooltip("Apply recoil while grounded. Overridden by PlayerConfig when present.")]
         public bool recoilWhileGrounded = false;
 
+        [Header("Ammo")]
+        [Tooltip("Only one shot per airtime: after firing mid-air the bow is spent until the archer lands.")]
+        public bool oneShotPerAirtime = true;
+
         [Header("Tuning (falls back to PlayerConfig when present)")]
         public float drawTime = 0.5f;
         public float minSpeed = 10f;
@@ -67,10 +71,14 @@ namespace NixAndEko.Combat
         /// <summary>The current snapped aim direction (unit vector).</summary>
         public Vector2 AimDirection { get; private set; } = Vector2.right;
 
+        /// <summary>False while the bow is spent mid-air, so UI can grey the reticle out.</summary>
+        public bool CanFire => !oneShotPerAirtime || !_shotSpent;
+
         Camera _cam;
         Vector2 _dragAnchorScreen;         // where Attack was pressed, in screen pixels
         bool _hasAnchor;                   // is a drag gesture currently active
         bool _hasAim;                      // has the drag cleared the deadzone yet
+        bool _shotSpent;                   // fired since last touching the ground
         float _arrowGravity = 2.2f;   // arrow's gravityScale, for arc prediction
 
         /// <summary>The world point aiming originates from — the player's center.</summary>
@@ -101,12 +109,15 @@ namespace NixAndEko.Combat
         {
             if (input == null) return;
 
+            // Landing reloads the bow.
+            if (player != null && player.Grounded) _shotSpent = false;
+
             UpdateDragAnchor();
 
             AimDirection = ResolveAim();
             UpdateIndicator();
 
-            if (input.AttackHeld)
+            if (input.AttackHeld && CanFire)
             {
                 IsDrawing = true;
                 Charge = Mathf.Clamp01(Charge + Time.deltaTime / Mathf.Max(0.01f, drawTime));
@@ -116,7 +127,7 @@ namespace NixAndEko.Combat
 
             if (input.AttackReleased && IsDrawing)
             {
-                Fire(AimDirection, Charge);
+                if (CanFire) Fire(AimDirection, Charge);
                 Charge = 0f;
                 IsDrawing = false;
             }
@@ -297,6 +308,9 @@ namespace NixAndEko.Combat
 
             arrow.Launch(aimDir * speed, charge);
             ApplyRecoil(aimDir, charge);
+
+            // Airborne shots spend the bow until the archer next touches the ground.
+            if (player != null && !player.Grounded) _shotSpent = true;
         }
 
         /// <summary>

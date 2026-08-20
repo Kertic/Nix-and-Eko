@@ -60,6 +60,25 @@ namespace NixAndEko.Player
         public CrouchState Crouch { get; private set; }
         public HurtState Hurt { get; private set; }
 
+        /// <summary>Coarse animation state, derived from the current locomotion state.</summary>
+        public enum AnimState { Idle, Run, Jump, Fall, WallSlide, Crouch, Hurt }
+
+        /// <summary>What the sprite should currently be showing.</summary>
+        public AnimState Anim
+        {
+            get
+            {
+                var c = Machine.Current;
+                if (c == Hurt) return AnimState.Hurt;
+                if (c == WallSlide) return AnimState.WallSlide;
+                if (c == Crouch) return AnimState.Crouch;
+                if (c == Jump) return AnimState.Jump;
+                if (c == Fall) return AnimState.Fall;
+                if (c == MoveS) return AnimState.Run;
+                return AnimState.Idle;
+            }
+        }
+
         readonly StateMachine _machine = new StateMachine();
         public StateMachine Machine => _machine;
 

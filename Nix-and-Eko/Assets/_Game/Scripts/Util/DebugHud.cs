@@ -27,8 +27,10 @@ namespace NixAndEko.Util
             GUILayout.BeginArea(new Rect(10, 10, 320, 150), GUI.skin.box);
             if (health != null) GUILayout.Label($"HP: {health.Current}", style);
             if (player != null) GUILayout.Label($"State: {player.currentState}", style);
-            if (bow != null && bow.IsDrawing)
-                GUILayout.Label($"Draw: {(bow.Charge * 100f):0}%", style);
+            if (bow != null)
+                GUILayout.Label(bow.CanFire
+                    ? (bow.IsDrawing ? $"Draw: {(bow.Charge * 100f):0}%" : "Bow: ready")
+                    : "Bow: spent - land to reload", style);
             GUILayout.Label("Move: A/D  Jump: Space", style);
             GUILayout.Label("Crouch: Ctrl  Shoot: hold LMB, drag to aim, release", style);
             GUILayout.EndArea();

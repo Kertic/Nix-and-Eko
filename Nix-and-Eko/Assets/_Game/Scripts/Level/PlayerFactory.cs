@@ -33,17 +33,15 @@ namespace NixAndEko.Level
             spriteGo.transform.SetParent(go.transform, false);
             var sr = spriteGo.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 10;
-            var ps = spriteGo.AddComponent<ProceduralSprite>();
-            ps.shape = ProceduralSprite.Shape.Tile;
-            ps.primary = Palette.Player;
-            ps.secondary = Palette.Player * 0.6f;
-            ps.pixelsX = 16; ps.pixelsY = 16;
-            ps.Rebuild();
+            sr.sprite = ArcherSprites.IdleFrames[0];
 
             var controller = go.AddComponent<PlayerController>();
             controller.config = config;
             controller.spriteRoot = spriteGo.transform;
             controller.groundMask = 1 << groundLayer;
+
+            var animator = spriteGo.AddComponent<PlayerAnimator>();
+            animator.player = controller;
 
             var reader = go.AddComponent<PlayerInputReader>();
             reader.actions = inputAsset;
