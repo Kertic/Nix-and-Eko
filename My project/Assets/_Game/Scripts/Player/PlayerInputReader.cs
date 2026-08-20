@@ -16,7 +16,7 @@ namespace NixAndEko.Player
         InputAction _move, _look, _jump, _attack, _crouch, _interact;
 
         public Vector2 Move { get; private set; }
-        /// <summary>Raw aim source (gamepad right stick / look). Zero when unused; controller falls back to mouse.</summary>
+        /// <summary>Right-stick / look vector. Unused by the bow (aim comes from Move); kept for future use.</summary>
         public Vector2 Look { get; private set; }
 
         public bool JumpPressed { get; private set; }

@@ -30,7 +30,7 @@ namespace NixAndEko.Util
             if (bow != null && bow.IsDrawing)
                 GUILayout.Label($"Draw: {(bow.Charge * 100f):0}%", style);
             GUILayout.Label("Move: A/D  Jump: Space", style);
-            GUILayout.Label("Crouch: Ctrl  Shoot: hold/release LMB", style);
+            GUILayout.Label("Crouch: Ctrl  Shoot: hold LMB, drag to aim, release", style);
             GUILayout.EndArea();
         }
     }

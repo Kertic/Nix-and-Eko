@@ -11,13 +11,17 @@ namespace NixAndEko.Util
     [RequireComponent(typeof(SpriteRenderer))]
     public class ProceduralSprite : MonoBehaviour
     {
-        public enum Shape { Tile, Target, Arrow }
+        public enum Shape { Tile, Target, Arrow, Circle }
 
         public Shape shape = Shape.Tile;
         public Color primary = new Color(0.35f, 0.55f, 0.85f);
         public Color secondary = new Color(0.15f, 0.25f, 0.45f);
         public int pixelsX = 16;
         public int pixelsY = 16;
+
+        [Range(0.05f, 1f)]
+        [Tooltip("Stroke width of the Circle shape, as a fraction of its radius.")]
+        public float circleThickness = 0.22f;
 
         [Tooltip("If both > 0, draws the tile in Tiled mode at this world size (repeats the sprite).")]
         public Vector2 tiledSize = Vector2.zero;
@@ -36,6 +40,7 @@ namespace NixAndEko.Util
             Sprite sprite = shape switch
             {
                 Shape.Target => SpriteFactory.Target(primary, secondary, Mathf.Max(4, pixelsX)),
+                Shape.Circle => SpriteFactory.Circle(primary, Mathf.Max(4, pixelsX), circleThickness),
                 Shape.Arrow => SpriteFactory.Arrow(primary, secondary, Mathf.Max(6, pixelsX), Mathf.Max(3, pixelsY)),
                 _ => SpriteFactory.SolidRect(primary, Mathf.Max(2, pixelsX), Mathf.Max(2, pixelsY), secondary),
             };

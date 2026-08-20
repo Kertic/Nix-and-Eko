@@ -96,8 +96,9 @@ namespace NixAndEko.EditorTools
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene());
             Debug.Log("[Builder] Test level built. Press Play. Controls: A/D move, Space jump (hold=higher), " +
                       "Ctrl crouch (Ctrl+Space to drop through the white platform), cling to the shaft " +
-                      "walls to wall-slide (no wall-jump). Hold LMB to draw the bow — the reticle shows the 8-way " +
-                      "aim & charge — release to fire.");
+                      "walls to wall-slide (no wall-jump). Hold LMB to draw, then drag away from the click point to " +
+                      "aim in one of 8 directions — the " +
+                      "reticle and arc preview show aim & charge — release to fire.");
         }
 
         [MenuItem("Tools/Nix & Eko/Create Player Config", priority = 20)]
@@ -192,6 +193,22 @@ namespace NixAndEko.EditorTools
             lr.endColor = new Color(1f, 1f, 1f, 0f);
             trajGo.AddComponent<ProceduralLine>(); // keeps the material valid across save/reload
             bow.trajectory = lr;
+
+            // Drag anchor: a small ring marking the spot the drag started.
+            var anchorGo = new GameObject("DragAnchor");
+            anchorGo.transform.SetParent(bowGo.transform);
+            anchorGo.transform.localScale = Vector3.one * 0.6f;
+            var anchorSr = anchorGo.AddComponent<SpriteRenderer>();
+            anchorSr.sortingOrder = 21;
+            anchorSr.color = new Color(1f, 1f, 1f, 0.75f);
+            var anchorPs = anchorGo.AddComponent<ProceduralSprite>();
+            anchorPs.shape = ProceduralSprite.Shape.Circle;
+            anchorPs.primary = P8White;
+            anchorPs.circleThickness = 0.25f;
+            anchorPs.pixelsX = 16; anchorPs.pixelsY = 16;
+            anchorPs.Rebuild();
+            anchorGo.SetActive(false);
+            bow.dragAnchorIndicator = anchorGo.transform;
 
             // Debug HUD.
             var hudGo = new GameObject("DebugHUD");

@@ -32,6 +32,24 @@ namespace NixAndEko.Util
             return ToSprite(tex);
         }
 
+        /// <summary>A hollow circle outline — used to mark where a drag gesture started.</summary>
+        public static Sprite Circle(Color stroke, int pixels = 16, float thickness = 0.22f)
+        {
+            var tex = NewTex(pixels, pixels);
+            Vector2 c = new Vector2((pixels - 1) / 2f, (pixels - 1) / 2f);
+            float r = pixels * 0.5f;
+            float inner = 1f - Mathf.Clamp01(thickness);
+
+            for (int y = 0; y < pixels; y++)
+            for (int x = 0; x < pixels; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x, y), c) / r;
+                tex.SetPixel(x, y, d <= 1f && d >= inner ? stroke : Color.clear);
+            }
+            tex.Apply();
+            return ToSprite(tex);
+        }
+
         /// <summary>A concentric-ring target sprite for switches.</summary>
         public static Sprite Target(Color ring, Color center, int pixels = 16)
         {

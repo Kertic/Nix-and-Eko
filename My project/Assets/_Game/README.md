@@ -17,7 +17,7 @@ chunky-pixel look. Swap in real tile/sprite art when ready.
 | Move | A/D / left stick | |
 | Jump | Space / South button | Hold = higher (variable height). Coyote-time + jump buffer. |
 | Crouch | Ctrl/C | Crouch+Jump drops through wooden one-way platforms. |
-| Shoot | Hold/Release LMB (Attack) | Hold to draw (reticle + trajectory arc show aim/charge), release to fire. Aim snaps to **8 directions** (sticky — it holds its direction until you move well past the 45° boundary). Firing **recoils you opposite the shot**: shoot down to pogo upward, shoot sideways in the air to boost the other way. Scales with draw. |
+| Shoot | Hold LMB (Attack), **drag to aim**, release to fire | Pressing LMB pins a ring at the cursor; dragging away from it picks the fire direction, snapped to **8 directions**. Until the drag clears the deadzone the aim holds its last direction, defaulting to facing. Reticle + trajectory arc show aim/charge (sticky — it holds its direction until you move well past the 45° boundary). Firing **recoils you opposite the shot**: shoot down to pogo upward, shoot sideways in the air to boost the other way. Scales with draw. |
 | Wall-slide | Hold into a wall while airborne | Slows your fall. **No wall-jump** — slide only. Try the shaft on the left. |
 
 ## Architecture
@@ -39,9 +39,11 @@ Scripts/
   Util/
     SpriteFactory.cs           Procedural point-filtered placeholder sprites.
     ProceduralSprite.cs        Component that builds a sprite from params (no art assets).
+    ProceduralLine.cs          Keeps the trajectory LineRenderer's material valid on reload.
     DebugHud.cs                On-screen HP/state/charge readout for playtesting.
 Editor/
   TestLevelBuilder.cs          Menu command that assembles the whole test level in code.
+  EditorAutoRefresh.cs         Enables auto-recompile on save (incl. during Play mode).
 ```
 
 ### Extending

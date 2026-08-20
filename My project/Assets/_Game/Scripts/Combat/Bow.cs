@@ -7,7 +7,9 @@ namespace NixAndEko.Combat
     /// <summary>
     /// Drives aiming and shooting in parallel with locomotion, so the player can fire while
     /// running, jumping or wall-sliding. Hold Attack to draw (charge), release to fire.
-    /// Aim is snapped to 8 cardinal/ordinal directions. A reticle indicates draw + aim.
+    /// Aim is a mouse drag: press to pin an anchor at the cursor, drag away from it to choose
+    /// one of 8 directions, release to fire.
+    /// A reticle and trajectory arc indicate draw + aim.
     /// </summary>
     public class Bow : MonoBehaviour
     {
@@ -23,6 +25,8 @@ namespace NixAndEko.Combat
         public SpriteRenderer aimIndicatorRenderer;
         [Tooltip("LineRenderer that previews the arrow's arc while drawing. Optional.")]
         public LineRenderer trajectory;
+        [Tooltip("Small marker drawn where the drag started. Optional.")]
+        public Transform dragAnchorIndicator;
 
         [Header("Trajectory preview")]
         [Tooltip("How many sample points along the predicted arc.")]
@@ -36,6 +40,8 @@ namespace NixAndEko.Combat
         [Tooltip("Extra degrees past a sector boundary the aim must travel before switching direction. Prevents flicker at the 45° edges. Overridden by PlayerConfig when present.")]
         [Range(0f, 22f)]
         public float aimHysteresis = 12f;
+        [Tooltip("How far the cursor must move from the anchor (screen pixels) before a direction registers.")]
+        public float dragDeadzonePixels = 14f;
 
         [Header("Recoil")]
         [Tooltip("Speed applied to the player opposite the shot at zero draw. Overridden by PlayerConfig when present.")]
@@ -60,6 +66,9 @@ namespace NixAndEko.Combat
         public Vector2 AimDirection { get; private set; } = Vector2.right;
 
         Camera _cam;
+        Vector2 _dragAnchorScreen;         // where Attack was pressed, in screen pixels
+        bool _hasAnchor;                   // is a drag gesture currently active
+        bool _hasAim;                      // has the drag cleared the deadzone yet
         float _arrowGravity = 2.2f;   // arrow's gravityScale, for arc prediction
 
         /// <summary>The world point aiming originates from — the player's center.</summary>
@@ -67,7 +76,6 @@ namespace NixAndEko.Combat
 
         void Awake()
         {
-            _cam = Camera.main;
             if (muzzle == null) muzzle = transform;
             if (player == null) player = GetComponentInParent<PlayerController>();
             if (input == null && player != null) input = player.Input;
@@ -89,6 +97,8 @@ namespace NixAndEko.Combat
         void Update()
         {
             if (input == null) return;
+
+            UpdateDragAnchor();
 
             AimDirection = ResolveAim();
             UpdateIndicator();
@@ -146,22 +156,55 @@ namespace NixAndEko.Combat
             return new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)).normalized;
         }
 
+        /// <summary>
+        /// Aim comes from a mouse drag: pressing Attack pins an anchor at the cursor, and the
+        /// direction dragged away from that anchor is the direction the arrow flies (snapped to
+        /// eight). The gesture is measured in screen space so a scrolling camera can't skew it.
+        /// Before the drag clears the deadzone the aim holds its last value, then the facing.
+        /// </summary>
         Vector2 GetRawAim()
         {
-            // Gamepad right stick takes priority when actively used.
-            if (input.Look.sqrMagnitude > 0.15f)
-                return input.Look;
-
-            // Otherwise aim from the muzzle toward the mouse.
-            if (_cam == null) _cam = Camera.main;
-            if (_cam != null && Mouse.current != null)
+            if (Mouse.current != null && _hasAnchor)
             {
-                Vector3 mouse = _cam.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-                Vector2 dir = (Vector2)mouse - (Vector2)Origin;
-                if (dir.sqrMagnitude > 0.001f) return dir;
+                Vector2 drag = Mouse.current.position.ReadValue() - _dragAnchorScreen;
+                if (drag.sqrMagnitude > dragDeadzonePixels * dragDeadzonePixels)
+                {
+                    _hasAim = true;
+                    return drag;   // screen and world axes align for an unrotated ortho camera
+                }
             }
 
+            // Drag hasn't left the anchor yet — keep pointing where we already were.
+            if (_hasAim) return SectorToDir(_aimSector);
+
             return player != null ? new Vector2(player.Facing, 0f) : Vector2.right;
+        }
+
+        /// <summary>Pin/release the drag anchor and keep its on-screen marker in place.</summary>
+        void UpdateDragAnchor()
+        {
+            if (input.AttackPressed && Mouse.current != null)
+            {
+                _dragAnchorScreen = Mouse.current.position.ReadValue();
+                _hasAnchor = true;
+                _hasAim = false;   // a fresh gesture starts from the archer's facing
+            }
+
+            if (!input.AttackHeld) _hasAnchor = false;
+
+            if (dragAnchorIndicator == null) return;
+            dragAnchorIndicator.gameObject.SetActive(_hasAnchor);
+            if (!_hasAnchor) return;
+
+            // Re-project every frame so the marker stays under the spot that was clicked.
+            if (_cam == null) _cam = Camera.main;
+            if (_cam != null)
+            {
+                Vector3 world = _cam.ScreenToWorldPoint(new Vector3(
+                    _dragAnchorScreen.x, _dragAnchorScreen.y, -_cam.transform.position.z));
+                world.z = 0f;
+                dragAnchorIndicator.position = world;
+            }
         }
 
         void UpdateIndicator()

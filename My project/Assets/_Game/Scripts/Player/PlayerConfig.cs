@@ -27,13 +27,13 @@ namespace NixAndEko.Player
         [Tooltip("Peak jump height in units (used to derive jump velocity).")]
         public float jumpHeight = 3.2f;
         [Tooltip("Gravity while rising.")]
-        public float gravityUp = 60f;
+        public float gravityUp = 32f;
         [Tooltip("Gravity while falling (higher = snappier arc).")]
-        public float gravityDown = 90f;
+        public float gravityDown = 42f;
         [Tooltip("Extra gravity applied when jump is released early (variable jump height).")]
-        public float jumpCutGravity = 140f;
+        public float jumpCutGravity = 80f;
         [Tooltip("Maximum downward speed.")]
-        public float maxFallSpeed = 26f;
+        public float maxFallSpeed = 16f;
         [Tooltip("Seconds after leaving a ledge you can still jump.")]
         public float coyoteTime = 0.1f;
         [Tooltip("Seconds a jump press is remembered before landing.")]
