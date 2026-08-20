@@ -48,6 +48,8 @@ namespace NixAndEko.Combat
         public float recoilMin = 4f;
         [Tooltip("Speed applied to the player opposite the shot at full draw. Overridden by PlayerConfig when present.")]
         public float recoilMax = 14f;
+        [Tooltip("Apply recoil while grounded. Overridden by PlayerConfig when present.")]
+        public bool recoilWhileGrounded = false;
 
         [Header("Tuning (falls back to PlayerConfig when present)")]
         public float drawTime = 0.5f;
@@ -90,6 +92,7 @@ namespace NixAndEko.Combat
                 maxSpeed = player.Config.arrowMaxSpeed;
                 recoilMin = player.Config.recoilMin;
                 recoilMax = player.Config.recoilMax;
+                recoilWhileGrounded = player.Config.recoilWhileGrounded;
                 aimHysteresis = player.Config.aimHysteresis;
             }
         }
@@ -303,6 +306,9 @@ namespace NixAndEko.Combat
         void ApplyRecoil(Vector2 aimDir, float charge)
         {
             if (player == null) return;
+
+            // Standing on the ground, the archer is braced — no recoil shove.
+            if (player.Grounded && !recoilWhileGrounded) return;
 
             float recoil = Mathf.Lerp(recoilMin, recoilMax, charge);
             Vector2 kick = -aimDir * recoil;

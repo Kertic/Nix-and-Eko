@@ -62,6 +62,8 @@ namespace NixAndEko.Player
         [Tooltip("Extra degrees past a 45° sector boundary the aim must travel before snapping to the next direction (anti-flicker).")]
         [Range(0f, 22f)]
         public float aimHysteresis = 12f;
+        [Tooltip("Apply firing recoil while standing on the ground. Off = recoil only kicks in mid-air, so ground shots don't shove you around.")]
+        public bool recoilWhileGrounded = false;
 
         [Header("Health")]
         public int maxHealth = 5;

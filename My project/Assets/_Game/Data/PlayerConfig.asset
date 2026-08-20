@@ -33,6 +33,7 @@ MonoBehaviour:
   recoilMin: 4
   recoilMax: 14
   aimHysteresis: 12
+  recoilWhileGrounded: 0
   maxHealth: 5
   invulnTime: 0.8
   hurtKnockback: 12
