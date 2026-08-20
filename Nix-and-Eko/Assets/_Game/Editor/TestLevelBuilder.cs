@@ -82,10 +82,10 @@ namespace NixAndEko.EditorTools
                 Debug.LogWarning("[Builder] Input asset not found at " + InputAssetPath +
                                  ". Assign one on the Player's PlayerInputReader.");
 
-            var existing = GameObject.Find(RootName);
-            if (existing != null) Object.DestroyImmediate(existing);
+            ClearPreviousBuilds();
 
             var root = new GameObject(RootName);
+            root.AddComponent<LevelRoot>();
             Undo.RegisterCreatedObjectUndo(root, "Build Level");
 
             LevelBuilder.Build(level, root.transform, groundLayer);
@@ -110,6 +110,29 @@ namespace NixAndEko.EditorTools
                       "A/D move, Space jump (hold = higher), Ctrl crouch (Ctrl+Space drops through white platforms), " +
                       "cling to walls to slide. Hold LMB to draw, drag from the circle to aim in 8 directions, " +
                       "release to fire - mid-air shots recoil you the opposite way.");
+        }
+
+        /// <summary>Root names used by earlier versions, cleaned up so rebuilds never stack up.</summary>
+        static readonly string[] LegacyRootNames =
+        {
+            "— Nix&Eko Test Level —",
+            "-- Nix&Eko Test Level --",
+        };
+
+        /// <summary>Remove any previous build: marked roots first, then known legacy names.</summary>
+        static void ClearPreviousBuilds()
+        {
+            foreach (var marker in Object.FindObjectsByType<LevelRoot>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (marker != null) Object.DestroyImmediate(marker.gameObject);
+
+            var byName = new List<string>(LegacyRootNames) { RootName };
+            foreach (string n in byName)
+            {
+                GameObject go;
+                while ((go = GameObject.Find(n)) != null)
+                    Object.DestroyImmediate(go);
+            }
         }
 
         [MenuItem("Tools/Nix & Eko/Create Player Config", priority = 20)]
