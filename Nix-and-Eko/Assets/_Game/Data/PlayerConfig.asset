@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8ed46ce3bfd1b52478a404143853d845, type: 3}
+  m_Name: PlayerConfig
+  m_EditorClassIdentifier: 
+  moveSpeed: 8
+  groundAccel: 90
+  groundDecel: 100
+  airAccel: 45
+  crouchSpeedMultiplier: 0.45
+  jumpHeight: 3.2
+  gravityUp: 32
+  gravityDown: 42
+  jumpCutGravity: 80
+  maxFallSpeed: 16
+  coyoteTime: 0.1
+  jumpBuffer: 0.12
+  airJumps: 0
+  wallSlideSpeed: 4
+  bowDrawTime: 0.25
+  arrowMinSpeed: 10
+  arrowMaxSpeed: 34
+  drawMoveMultiplier: 0.55
+  recoilMin: 4
+  recoilMax: 14
+  aimHysteresis: 12
+  recoilWhileGrounded: 0
+  maxHealth: 5
+  invulnTime: 0.8
+  hurtKnockback: 12
+  hurtControlLock: 0.25
