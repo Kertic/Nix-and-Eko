@@ -47,6 +47,41 @@ namespace NixAndEko.Util
             return ToSprite(tex, new Vector2(0f, 0.5f));
         }
 
+        /// <summary>
+        /// A gently bowed bar — a shallow arc like a Skyrim status meter, center-pivoted so
+        /// scaling its transform down on X shrinks it symmetrically toward the middle from both
+        /// ends. <paramref name="arc"/> is how many pixels the ends rise above the center;
+        /// <paramref name="thickness"/> is the strip's vertical width.
+        /// </summary>
+        public static Sprite CurvedBar(Color fill, int w = 24, int thickness = 3, int arc = 3, Color? border = null)
+        {
+            int h = thickness + arc + 2;               // room for the bow + a 1px margin top/bottom
+            var tex = NewTex(w, h);
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                tex.SetPixel(x, y, Color.clear);
+
+            Color b = border ?? fill * 0.55f;
+            b.a = fill.a;
+
+            float baseY = 1f + thickness * 0.5f;       // vertical center of the strip at mid-span
+            for (int x = 0; x < w; x++)
+            {
+                float t = w <= 1 ? 0f : (x / (float)(w - 1)) * 2f - 1f;   // -1..1 across the span
+                float centerY = baseY + arc * (t * t);                    // ends bow upward
+                int lo = Mathf.RoundToInt(centerY - thickness * 0.5f);
+                int hi = lo + thickness - 1;
+                for (int y = lo; y <= hi; y++)
+                {
+                    if (y < 0 || y >= h) continue;
+                    bool edge = y == lo || y == hi || x == 0 || x == w - 1;
+                    tex.SetPixel(x, y, edge ? b : fill);
+                }
+            }
+            tex.Apply();
+            return ToSprite(tex);   // center pivot → symmetric shrink
+        }
+
         /// <summary>A hollow circle outline — used to mark where a drag gesture started.</summary>
         public static Sprite Circle(Color stroke, int pixels = 16, float thickness = 0.22f)
         {

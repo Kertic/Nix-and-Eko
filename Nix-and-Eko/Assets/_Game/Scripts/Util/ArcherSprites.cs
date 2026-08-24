@@ -24,6 +24,9 @@ namespace NixAndEko.Util
             ['l'] = Hex("#3A342F"),   // boots
             ['W'] = Hex("#AB5236"),   // bow stave
             ['q'] = Hex("#FFEC27"),   // fletching
+            ['G'] = Hex("#F2A23C"),   // glider canopy
+            ['g'] = Hex("#B96C25"),   // glider canopy underside / tips
+            ['r'] = Hex("#6B6156"),   // glider rigging lines
         };
 
         static Color Hex(string h) { ColorUtility.TryParseHtmlString(h, out var c); return c; }
@@ -168,22 +171,22 @@ namespace NixAndEko.Util
             "...........",
         };
 
-        // ---- Glide: cloak spread wide like a wingsuit, legs trailing straight and together ----
+        // ---- Glide: hanging from a delta-wing glider, cloak spread, legs trailing together ----
         static readonly string[] Glide =
         {
-            "...........",
-            "...hHHh....",
-            "..hHHHHh...",
-            "..hHFFFh...",
-            "..hHFEFh...",
-            "...hFFh..W.",
-            "bBBBBBBBBb.",
-            ".bBBBBBBb..",
-            "..bBBBBb...",
-            "....LL.....",
-            "....LL.....",
-            "....ll.....",
-            "...........",
+            ".GGGGGGGGGGG.",
+            "gGGGGGGGGGGGg",
+            "....r...r....",
+            "....hHHh.....",
+            "...hHHHHh....",
+            "...hHFFFh....",
+            "...hHFEFh..W.",
+            "...bBBBBb....",
+            ".bBBBBBBBBb..",
+            "..bBBBBBBb...",
+            "...bBBBBb....",
+            "....LLLL.....",
+            "....llll.....",
         };
 
         // ---- Wall slide: pressed flat against the wall, one arm up ----
