@@ -37,6 +37,18 @@ namespace NixAndEko.Player
         [Tooltip("Seconds a Jump press is remembered before landing — only used by crouch + " +
                  "jump to drop through one-way platforms, now that there's no button-jump.")]
         public float jumpBuffer = 0.12f;
+        [Tooltip("Seconds after becoming airborne before natural air deceleration kicks in " +
+                 "(outside glide) — lets a jump/launch keep its pop for a beat before drag " +
+                 "starts pulling horizontal speed back toward moveSpeed.")]
+        public float airDragDelay = 0.15f;
+
+        [Header("Glide")]
+        [Tooltip("Seconds of glide fuel: how long the glide trigger can hold off air drag and " +
+                 "fall gravity before it runs dry and you drop back to normal falling.")]
+        public float glideDuration = 1.5f;
+        [Tooltip("Gravity while falling with glide held — much lighter than gravityDown so it " +
+                 "actually glides instead of just falling slower. Ignored while rising.")]
+        public float glideGravity = 8f;
 
         [Header("Wall")]
         [Tooltip("Downward speed while sliding on a wall (no wall-jump — slide only).")]
@@ -45,9 +57,9 @@ namespace NixAndEko.Player
         [Header("Bow")]
         [Tooltip("Seconds to fully draw the bow.")]
         public float bowDrawTime = 0.2f;
-        [Tooltip("Arrow speed at zero draw.")]
+        [Tooltip("Flat arrow speed for anything less than a full draw — binary, not lerped with charge.")]
         public float arrowMinSpeed = 10f;
-        [Tooltip("Arrow speed at full draw.")]
+        [Tooltip("Arrow speed on a full draw only.")]
         public float arrowMaxSpeed = 34f;
         [Tooltip("Recoil: velocity the player is set to (opposite the shot) at zero draw — a dash-style burst, not an add-on.")]
         public float recoilMin = 4f;

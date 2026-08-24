@@ -15906,6 +15906,7 @@ MonoBehaviour:
   JumpBufferTimer: 0
   InputLockTimer: 0
   CoyoteTimer: 0
+  AirTimer: 0
 --- !u!4 &806070405
 Transform:
   m_ObjectHideFlags: 0

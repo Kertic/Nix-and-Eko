@@ -25,5 +25,27 @@ namespace NixAndEko.Player.States
             return !P.Grounded && P.OnWall && P.Velocity.y < 0.1f &&
                    Mathf.Sign(In.Move.x) == P.WallDir && Mathf.Abs(In.Move.x) > 0.2f;
         }
+
+        /// <summary>
+        /// Air steering shared by Jump/Fall: while gliding, or still within the post-launch
+        /// <see cref="PlayerConfig.airDragDelay"/> grace window, momentum is preserved — input
+        /// only pushes speed up toward moveSpeed, never decays it, so releasing (or holding
+        /// forward) can't slow you down. Outside both of those it's normal air control: no input
+        /// decelerates back to a stop, same as on the ground.
+        /// </summary>
+        protected void AirHorizontal()
+        {
+            bool hasInput = Mathf.Abs(In.Move.x) > 0.2f;
+            bool preserveMomentum = P.IsGliding || P.AirTimer < Cfg.airDragDelay;
+
+            if (preserveMomentum)
+            {
+                if (hasInput) P.AccelerateHorizontal(Mathf.Sign(In.Move.x) * Cfg.moveSpeed, Cfg.airAccel);
+            }
+            else
+            {
+                P.MoveHorizontal(hasInput ? Mathf.Sign(In.Move.x) * Cfg.moveSpeed : 0f, Cfg.airAccel);
+            }
+        }
     }
 }

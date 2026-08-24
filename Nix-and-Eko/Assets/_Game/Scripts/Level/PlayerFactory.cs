@@ -57,6 +57,7 @@ namespace NixAndEko.Level
             health.killY = killY;
 
             BuildBow(go, controller, reader, arrowTemplate);
+            BuildGlideFuelBar(go, controller);
 
             go.SetActive(true);   // everything is wired; let the components wake
             return controller;
@@ -124,6 +125,18 @@ namespace NixAndEko.Level
             anchorPs.Rebuild();
             anchorGo.SetActive(false);
             bow.dragAnchorIndicator = anchorGo.transform;
+        }
+
+        /// <summary>
+        /// The glide-fuel meter, parented under the player root (not the flipping sprite child)
+        /// so it never mirrors with facing.
+        /// </summary>
+        static void BuildGlideFuelBar(GameObject playerGo, PlayerController controller)
+        {
+            var barGo = new GameObject("GlideFuelBar");
+            barGo.transform.SetParent(playerGo.transform, false);
+            var bar = barGo.AddComponent<GlideFuelBar>();
+            bar.player = controller;
         }
 
         /// <summary>An inactive arrow the Bow clones for each shot.</summary>

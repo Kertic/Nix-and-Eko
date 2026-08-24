@@ -168,6 +168,24 @@ namespace NixAndEko.Util
             "...........",
         };
 
+        // ---- Glide: cloak spread wide like a wingsuit, legs trailing straight and together ----
+        static readonly string[] Glide =
+        {
+            "...........",
+            "...hHHh....",
+            "..hHHHHh...",
+            "..hHFFFh...",
+            "..hHFEFh...",
+            "...hFFh..W.",
+            "bBBBBBBBBb.",
+            ".bBBBBBBb..",
+            "..bBBBBb...",
+            "....LL.....",
+            "....LL.....",
+            "....ll.....",
+            "...........",
+        };
+
         // ---- Wall slide: pressed flat against the wall, one arm up ----
         static readonly string[] WallSlide =
         {
@@ -222,7 +240,7 @@ namespace NixAndEko.Util
             "...........",
         };
 
-        static Sprite[] _idle, _walk, _jump, _fall, _slide, _crouch, _hurt;
+        static Sprite[] _idle, _walk, _jump, _fall, _glide, _slide, _crouch, _hurt;
 
         static Sprite Frame(string[] rows) => PixelArt.FromRows(rows, Pal);
 
@@ -238,6 +256,7 @@ namespace NixAndEko.Util
         public static Sprite[] WalkFrames => _walk ??= Clip(Walk0, Walk1, Walk2, Walk3);
         public static Sprite[] JumpFrames => _jump ??= Clip(JumpUp);
         public static Sprite[] FallFrames => _fall ??= Clip(FallDown);
+        public static Sprite[] GlideFrames => _glide ??= Clip(Glide);
         public static Sprite[] WallSlideFrames => _slide ??= Clip(WallSlide);
         public static Sprite[] CrouchFrames => _crouch ??= Clip(Crouch);
         public static Sprite[] HurtFrames => _hurt ??= Clip(Hurt);

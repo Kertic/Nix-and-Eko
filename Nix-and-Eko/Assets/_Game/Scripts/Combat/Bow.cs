@@ -61,7 +61,9 @@ namespace NixAndEko.Combat
 
         [Header("Tuning (falls back to PlayerConfig when present)")]
         public float drawTime = 0.2f;
+        [Tooltip("Flat arrow speed for anything less than a full draw — binary, not lerped with charge.")]
         public float minSpeed = 10f;
+        [Tooltip("Arrow speed on a full draw only.")]
         public float maxSpeed = 34f;
 
         [Header("Indicator feel")]
@@ -289,7 +291,7 @@ namespace NixAndEko.Combat
                 return;
             }
 
-            float speed = Mathf.Lerp(minSpeed, maxSpeed, Charge);
+            float speed = ArrowSpeed(Charge);
             Vector2 p0 = Origin;
             Vector2 v0 = AimDirection * speed;
             Vector2 accel = new Vector2(0f, Physics2D.gravity.y * _arrowGravity);
@@ -325,6 +327,13 @@ namespace NixAndEko.Combat
             trajectory.endColor = new Color(c.r, c.g, c.b, 0f); // fade out toward the end
         }
 
+        /// <summary>
+        /// Arrow speed is binary, not lerped: a full draw fires at <see cref="maxSpeed"/>,
+        /// anything less — including no charge at all — fires at the flat <see cref="minSpeed"/>.
+        /// There's no in-between force.
+        /// </summary>
+        float ArrowSpeed(float charge) => charge >= 1f ? maxSpeed : minSpeed;
+
         void Fire(Vector2 aimDir, float charge)
         {
             if (arrowPrefab == null)
@@ -333,7 +342,7 @@ namespace NixAndEko.Combat
                 return;
             }
 
-            float speed = Mathf.Lerp(minSpeed, maxSpeed, charge);
+            float speed = ArrowSpeed(charge);
             Quaternion rot = Quaternion.FromToRotation(Vector3.right, aimDir);
             Arrow arrow = Instantiate(arrowPrefab, Origin, rot); // origin = player center, matches the arc preview
             arrow.gameObject.SetActive(true); // template may be inactive; copies must run

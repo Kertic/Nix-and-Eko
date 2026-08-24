@@ -42,6 +42,17 @@ namespace NixAndEko.Player
         public int WallDir { get; private set; }
         public bool OnWall => WallDir != 0;
 
+        /// <summary>Seconds of glide fuel left. Refills to <see cref="PlayerConfig.glideDuration"/>
+        /// on landing, drains while actually gliding, and doesn't refill mid-air — once it's
+        /// gone, holding the glide trigger does nothing until you touch ground again.</summary>
+        public float GlideFuel { get; private set; }
+
+        /// <summary>True while airborne, holding the glide trigger, and there's still fuel left —
+        /// momentum is preserved instead of decaying, fall gravity is the lighter glide gravity,
+        /// and the glide sprite shows. Runs out mid-air and this goes false on its own, dropping
+        /// back to a normal fall even with the trigger still held.</summary>
+        public bool IsGliding => !Grounded && Input != null && Input.GlideHeld && GlideFuel > 0f;
+
         // --- Facing ---
         /// <summary>+1 faces right, -1 faces left.</summary>
         public int Facing { get; private set; } = 1;
@@ -58,6 +69,9 @@ namespace NixAndEko.Player
         /// grounded — the equivalent of jump coyote time, but for firing a "grounded" arrow
         /// instead of jumping.</summary>
         public float CoyoteTimer;
+        /// <summary>Seconds spent airborne since last leaving the ground. Drives the non-glide
+        /// grace window before natural air deceleration kicks in.</summary>
+        public float AirTimer;
 
         // --- States ---
         public IdleState Idle { get; private set; }
@@ -69,7 +83,7 @@ namespace NixAndEko.Player
         public HurtState Hurt { get; private set; }
 
         /// <summary>Coarse animation state, derived from the current locomotion state.</summary>
-        public enum AnimState { Idle, Run, Jump, Fall, WallSlide, Crouch, Hurt }
+        public enum AnimState { Idle, Run, Jump, Fall, Glide, WallSlide, Crouch, Hurt }
 
         /// <summary>What the sprite should currently be showing.</summary>
         public AnimState Anim
@@ -80,6 +94,7 @@ namespace NixAndEko.Player
                 if (c == Hurt) return AnimState.Hurt;
                 if (c == WallSlide) return AnimState.WallSlide;
                 if (c == Crouch) return AnimState.Crouch;
+                if ((c == Jump || c == Fall) && IsGliding) return AnimState.Glide;
                 if (c == Jump) return AnimState.Jump;
                 if (c == Fall) return AnimState.Fall;
                 if (c == MoveS) return AnimState.Run;
@@ -119,6 +134,8 @@ namespace NixAndEko.Player
                 config.name = baseName + " (runtime copy)";
                 if (input != null) input.config = config;
             }
+
+            GlideFuel = config != null ? config.glideDuration : 0f;
 
             Idle = new IdleState(this);
             MoveS = new MoveState(this);
@@ -170,6 +187,17 @@ namespace NixAndEko.Player
 
             if (Grounded) CoyoteTimer = Config.coyoteTime;
             else CoyoteTimer -= dt;
+
+            if (Grounded)
+            {
+                AirTimer = 0f;
+                GlideFuel = Config.glideDuration;   // only refills by touching ground
+            }
+            else
+            {
+                AirTimer += dt;
+                if (IsGliding) GlideFuel = Mathf.Max(0f, GlideFuel - dt);
+            }
         }
 
         // ------------------------------------------------------------------ Helpers used by states

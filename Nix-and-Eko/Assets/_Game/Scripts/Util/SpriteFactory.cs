@@ -32,6 +32,21 @@ namespace NixAndEko.Util
             return ToSprite(tex);
         }
 
+        /// <summary>
+        /// A flat-color bar with a left-edge pivot, so scaling its transform down on X shrinks
+        /// it from the right while the left edge stays put — for a fuel/resource meter that
+        /// drains toward zero without needing to reposition it every frame.
+        /// </summary>
+        public static Sprite Bar(Color fill, int w = 16, int h = 4)
+        {
+            var tex = NewTex(w, h);
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                tex.SetPixel(x, y, fill);
+            tex.Apply();
+            return ToSprite(tex, new Vector2(0f, 0.5f));
+        }
+
         /// <summary>A hollow circle outline — used to mark where a drag gesture started.</summary>
         public static Sprite Circle(Color stroke, int pixels = 16, float thickness = 0.22f)
         {

@@ -83,6 +83,7 @@ namespace NixAndEko.Player
                 PlayerController.AnimState.Run => ArcherSprites.WalkFrames,
                 PlayerController.AnimState.Jump => ArcherSprites.JumpFrames,
                 PlayerController.AnimState.Fall => ArcherSprites.FallFrames,
+                PlayerController.AnimState.Glide => ArcherSprites.GlideFrames,
                 PlayerController.AnimState.WallSlide => ArcherSprites.WallSlideFrames,
                 PlayerController.AnimState.Crouch => ArcherSprites.CrouchFrames,
                 PlayerController.AnimState.Hurt => ArcherSprites.HurtFrames,

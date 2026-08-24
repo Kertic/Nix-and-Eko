@@ -22,14 +22,10 @@ namespace NixAndEko.Player.States
 
         public override void FixedTick(float fdt)
         {
-            // No natural air drag: horizontal speed only changes if there's input to steer it,
-            // and holding the direction you're already flying never slows you down — only
-            // opposing input can. Letting go (or holding forward) keeps whatever speed you were
-            // carrying, so a running jump stays a long jump instead of bleeding off on its own.
-            if (Mathf.Abs(In.Move.x) > 0.2f)
-                P.AccelerateHorizontal(Mathf.Sign(In.Move.x) * Cfg.moveSpeed, Cfg.airAccel);
-
-            P.ApplyGravity(Cfg.gravityDown);
+            AirHorizontal();
+            // Glide uses its own much lighter gravity while falling — that's what makes it
+            // actually glide instead of just falling slower.
+            P.ApplyGravity(P.IsGliding ? Cfg.glideGravity : Cfg.gravityDown);
         }
     }
 }
