@@ -106,10 +106,13 @@ namespace NixAndEko.EditorTools
             Selection.activeGameObject = root;
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene());
-            Debug.Log("[Builder] Built '" + level.name + "' (" + level.blocks.Count + " blocks). Press Play. " +
-                      "A/D move, Space jump (hold = higher), Ctrl crouch (Ctrl+Space drops through white platforms), " +
-                      "cling to walls to slide. Hold LMB to draw, drag from the circle to aim in 8 directions, " +
-                      "release to fire - mid-air shots recoil you the opposite way.");
+            Debug.Log("[Builder] Built '" + level.name + "' (" + level.blocks.Count + " blocks). Press Play.\n" +
+                      "Keyboard: A/D move, Space jump (hold = higher), C crouch (C+Space drops through white " +
+                      "platforms). Hold LMB to draw, drag from the circle to aim in 8 directions, release to fire.\n" +
+                      "Gamepad (PS5 labels): left stick or d-pad move, X jump (hold = higher), Circle crouch. " +
+                      "Push the right stick to draw and aim, let it spring back to fire that way. " +
+                      "Hold R2 to keep the aim held after the stick recenters, and release R2 to fire.\n" +
+                      "Either way: cling to walls to slide, and mid-air shots recoil you the opposite way.");
         }
 
         /// <summary>Root names used by earlier versions, cleaned up so rebuilds never stack up.</summary>

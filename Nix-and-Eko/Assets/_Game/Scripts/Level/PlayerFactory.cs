@@ -17,6 +17,9 @@ namespace NixAndEko.Level
                                              Arrow arrowTemplate, Vector2 pos, Transform parent, float killY = -40f)
         {
             var go = new GameObject("Player");
+            // Assemble while inactive: AddComponent runs Awake immediately on a live object,
+            // which would wake components before their references are wired up.
+            go.SetActive(false);
             go.transform.SetParent(parent, false);
             go.transform.position = pos;
 
@@ -45,6 +48,7 @@ namespace NixAndEko.Level
 
             var reader = go.AddComponent<PlayerInputReader>();
             reader.actions = inputAsset;
+            reader.config = config;
             controller.input = reader;
 
             var health = go.AddComponent<Health>();
@@ -53,6 +57,8 @@ namespace NixAndEko.Level
             health.killY = killY;
 
             BuildBow(go, controller, reader, arrowTemplate);
+
+            go.SetActive(true);   // everything is wired; let the components wake
             return controller;
         }
 

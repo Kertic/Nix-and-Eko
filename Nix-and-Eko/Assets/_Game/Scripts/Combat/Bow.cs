@@ -7,8 +7,10 @@ namespace NixAndEko.Combat
     /// <summary>
     /// Drives aiming and shooting in parallel with locomotion, so the player can fire while
     /// running, jumping or wall-sliding. Hold Attack to draw (charge), release to fire.
-    /// Aim is a mouse drag: press to pin an anchor at the cursor, drag away from it to choose
-    /// one of 8 directions, release to fire.
+    /// On mouse, aim is a drag: press to pin an anchor at the cursor, drag away from it to
+    /// choose one of 8 directions, release to fire. On a gamepad the right stick does both jobs
+    /// at once: pushing it out starts the draw and points the shot, letting it spring back to
+    /// centre fires along the direction it was last pushed.
     /// A reticle and trajectory arc indicate draw + aim.
     /// </summary>
     public class Bow : MonoBehaviour
@@ -78,6 +80,8 @@ namespace NixAndEko.Combat
         Vector2 _dragAnchorScreen;         // where Attack was pressed, in screen pixels
         bool _hasAnchor;                   // is a drag gesture currently active
         bool _hasAim;                      // has the drag cleared the deadzone yet
+        bool _aimFromStick;                // this draw is steered by the right stick, not the mouse
+        bool _snapNow;                     // skip hysteresis for one frame (fresh stick flick)
         bool _shotSpent;                   // fired since last touching the ground
         float _arrowGravity = 2.2f;   // arrow's gravityScale, for arc prediction
 
@@ -112,6 +116,7 @@ namespace NixAndEko.Combat
             // Landing reloads the bow.
             if (player != null && player.Grounded) _shotSpent = false;
 
+            UpdateAimSource();
             UpdateDragAnchor();
 
             AimDirection = ResolveAim();
@@ -125,11 +130,12 @@ namespace NixAndEko.Combat
                     player.SetFacing(AimDirection.x > 0 ? 1 : -1);
             }
 
-            if (input.AttackReleased && IsDrawing)
+            if (input.AttackReleased)
             {
-                if (CanFire) Fire(AimDirection, Charge);
+                if (IsDrawing && CanFire) Fire(AimDirection, Charge);
                 Charge = 0f;
                 IsDrawing = false;
+                _aimFromStick = false;   // the next gesture picks its own source
             }
         }
 
@@ -139,7 +145,32 @@ namespace NixAndEko.Combat
         Vector2 ResolveAim()
         {
             Vector2 raw = GetRawAim();
-            return eightDirectional ? SnapSticky(raw) : raw.normalized;
+            if (!eightDirectional) return raw.normalized;
+
+            // A fresh flick of the stick should land exactly where it is pushed, so the very
+            // first frame of that gesture ignores the anti-flicker hysteresis.
+            if (_snapNow && raw.sqrMagnitude > 0.0001f)
+            {
+                _snapNow = false;
+                int nearest = Mathf.RoundToInt(Mathf.Atan2(raw.y, raw.x) * Mathf.Rad2Deg / 45f);
+                _aimSector = ((nearest % 8) + 8) % 8;
+                return SectorToDir(_aimSector);
+            }
+
+            return SnapSticky(raw);
+        }
+
+        /// <summary>
+        /// Work out whether this draw is a stick gesture or a mouse drag. The stick claims the
+        /// draw the moment it leaves centre and keeps it until the shot goes off, so the release
+        /// frame still fires along the direction the stick was pushed.
+        /// </summary>
+        void UpdateAimSource()
+        {
+            if (!input.AimStickActive) return;
+
+            if (!_aimFromStick) _snapNow = true;   // fresh flick: point exactly where it's pushed
+            _aimFromStick = true;
         }
 
         /// <summary>
@@ -171,13 +202,18 @@ namespace NixAndEko.Combat
         }
 
         /// <summary>
-        /// Aim comes from a mouse drag: pressing Attack pins an anchor at the cursor, and the
+        /// Aim comes from the right stick when one is in play, otherwise from a mouse drag.
+        /// For the mouse: pressing Attack pins an anchor at the cursor, and the
         /// direction dragged away from that anchor is the direction the arrow flies (snapped to
         /// eight). The gesture is measured in screen space so a scrolling camera can't skew it.
         /// Before the drag clears the deadzone the aim holds its last value, then the facing.
         /// </summary>
         Vector2 GetRawAim()
         {
+            // Right stick: the direction it's pushed is the direction the arrow flies. The
+            // input reader latches that direction, so the springback never steals the aim.
+            if (_aimFromStick) return input.AimStickDirection;
+
             if (Mouse.current != null && _hasAnchor)
             {
                 Vector2 drag = Mouse.current.position.ReadValue() - _dragAnchorScreen;
@@ -197,14 +233,14 @@ namespace NixAndEko.Combat
         /// <summary>Pin/release the drag anchor and keep its on-screen marker in place.</summary>
         void UpdateDragAnchor()
         {
-            if (input.AttackPressed && Mouse.current != null)
+            if (input.AttackPressed && !_aimFromStick && Mouse.current != null)
             {
                 _dragAnchorScreen = Mouse.current.position.ReadValue();
                 _hasAnchor = true;
                 _hasAim = false;   // a fresh gesture starts from the archer's facing
             }
 
-            if (!input.AttackHeld) _hasAnchor = false;
+            if (!input.AttackHeld || _aimFromStick) _hasAnchor = false;
 
             if (dragAnchorIndicator == null) return;
             dragAnchorIndicator.gameObject.SetActive(_hasAnchor);

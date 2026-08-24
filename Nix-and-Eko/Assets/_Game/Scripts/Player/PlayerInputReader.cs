@@ -7,17 +7,49 @@ namespace NixAndEko.Player
     /// Thin wrapper over an <see cref="InputActionAsset"/> so the rest of the code never
     /// touches the Input System directly. Point <see cref="actions"/> at the project's
     /// InputSystem_Actions asset (Player map). No generated wrapper class required.
+    ///
+    /// Keyboard/mouse and gamepad are both live at once; nothing has to be switched between.
+    /// On a gamepad the right stick doubles as the bow's trigger — pushing it out starts the
+    /// draw, letting it spring back fires — so <see cref="AttackHeld"/> and friends report the
+    /// union of the Attack button, that stick gesture, and the aim-hold trigger.
+    ///
+    /// Holding the aim-hold trigger (R2) keeps the draw alive after the stick springs back, so
+    /// the aim stays put and the shot only looses when the trigger is released — the same way
+    /// holding the Attack button (Square) already keeps a draw held.
     /// </summary>
+    [DefaultExecutionOrder(-100)]   // sample input before anything reads it this frame
     public class PlayerInputReader : MonoBehaviour
     {
         [Tooltip("Drag the InputSystem_Actions asset here. Uses the 'Player' action map.")]
         public InputActionAsset actions;
 
-        InputAction _move, _look, _jump, _attack, _crouch, _interact;
+        [Tooltip("Optional; when set, the aim-stick thresholds below are taken from it.")]
+        public PlayerConfig config;
+
+        [Header("Aim stick (gamepad)")]
+        [Tooltip("How far the right stick must be pushed before the bow starts drawing.")]
+        [Range(0.1f, 1f)]
+        public float aimStickEngage = 0.5f;
+        [Tooltip("The stick has to fall back below this before the shot goes off. Kept under the engage threshold so a stick held near the edge can't chatter.")]
+        [Range(0.05f, 1f)]
+        public float aimStickRelease = 0.3f;
+
+        InputAction _move, _look, _aim, _aimHold, _jump, _attack, _crouch, _interact;
 
         public Vector2 Move { get; private set; }
-        /// <summary>Right-stick / look vector. Unused by the bow (aim comes from Move); kept for future use.</summary>
+        /// <summary>Right-stick / look vector. Unused by the bow (which reads <see cref="AimStickDirection"/>); kept for future use.</summary>
         public Vector2 Look { get; private set; }
+        /// <summary>Raw right-stick vector, deadzone applied by the Input System.</summary>
+        public Vector2 Aim { get; private set; }
+
+        /// <summary>True while the right stick is pushed far enough to count as aiming the bow.</summary>
+        public bool AimStickActive { get; private set; }
+        /// <summary>
+        /// The last direction the right stick was pushed, held on to after it springs back to
+        /// centre — so pushing straight down and letting go fires straight down, rather than
+        /// wherever the stick happened to pass through on its way home.
+        /// </summary>
+        public Vector2 AimStickDirection { get; private set; } = Vector2.right;
 
         public bool JumpPressed { get; private set; }
         public bool JumpHeld { get; private set; }
@@ -27,8 +59,13 @@ namespace NixAndEko.Player
         public bool AttackHeld { get; private set; }
         public bool AttackReleased { get; private set; }
 
+        /// <summary>True while the aim-hold trigger (R2) is held, pinning the current draw.</summary>
+        public bool AimHoldHeld { get; private set; }
+
         public bool CrouchHeld { get; private set; }
         public bool InteractPressed { get; private set; }
+
+        bool _attackHeldLast;
 
         void Awake()
         {
@@ -39,9 +76,17 @@ namespace NixAndEko.Player
                 return;
             }
 
+            if (config != null)
+            {
+                aimStickEngage = config.aimStickEngage;
+                aimStickRelease = config.aimStickRelease;
+            }
+
             var map = actions.FindActionMap("Player", throwIfNotFound: true);
             _move = map.FindAction("Move");
             _look = map.FindAction("Look");
+            _aim = map.FindAction("Aim");
+            _aimHold = map.FindAction("AimHold");
             _jump = map.FindAction("Jump");
             _attack = map.FindAction("Attack");
             _crouch = map.FindAction("Crouch");
@@ -49,7 +94,15 @@ namespace NixAndEko.Player
         }
 
         void OnEnable() => actions?.FindActionMap("Player")?.Enable();
-        void OnDisable() => actions?.FindActionMap("Player")?.Disable();
+
+        void OnDisable()
+        {
+            actions?.FindActionMap("Player")?.Disable();
+            // Don't leave a half-finished gesture latched across a disable.
+            AimStickActive = false;
+            AimHoldHeld = false;
+            _attackHeldLast = false;
+        }
 
         void Update()
         {
@@ -60,12 +113,45 @@ namespace NixAndEko.Player
             JumpHeld = _jump != null && _jump.IsPressed();
             JumpReleased = _jump != null && _jump.WasReleasedThisFrame();
 
-            AttackPressed = _attack != null && _attack.WasPressedThisFrame();
-            AttackHeld = _attack != null && _attack.IsPressed();
-            AttackReleased = _attack != null && _attack.WasReleasedThisFrame();
+            AimHoldHeld = _aimHold != null && _aimHold.IsPressed();
+
+            UpdateAimStick();
+            UpdateAttack();
 
             CrouchHeld = _crouch != null && _crouch.IsPressed();
             InteractPressed = _interact != null && _interact.WasPressedThisFrame();
+        }
+
+        /// <summary>
+        /// Track the right stick as a hold-and-release gesture: it engages once pushed past
+        /// <see cref="aimStickEngage"/> and stays engaged until it falls under
+        /// <see cref="aimStickRelease"/>, and its direction is only sampled while it's clearly
+        /// deflected so the springback can't drag the aim with it.
+        /// </summary>
+        void UpdateAimStick()
+        {
+            Aim = _aim != null ? _aim.ReadValue<Vector2>() : Vector2.zero;
+
+            float mag = Aim.magnitude;
+            float release = Mathf.Min(aimStickRelease, aimStickEngage);
+            AimStickActive = mag >= (AimStickActive ? release : aimStickEngage);
+
+            if (mag >= aimStickEngage) AimStickDirection = Aim / mag;
+        }
+
+        /// <summary>
+        /// Attack is the Attack button OR the aim-stick gesture OR the aim-hold trigger, whichever
+        /// is active. The aim-hold trigger keeps the draw alive on its own, so a shot lined up with
+        /// the stick stays drawn after the stick springs back and fires when the trigger releases.
+        /// </summary>
+        void UpdateAttack()
+        {
+            bool held = (_attack != null && _attack.IsPressed()) || AimStickActive || AimHoldHeld;
+
+            AttackPressed = held && !_attackHeldLast;
+            AttackReleased = !held && _attackHeldLast;
+            AttackHeld = held;
+            _attackHeldLast = held;
         }
 
         /// <summary>Consume a buffered jump press so it isn't re-used by another system this frame.</summary>

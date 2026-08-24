@@ -65,6 +65,14 @@ namespace NixAndEko.Player
         [Tooltip("Apply firing recoil while standing on the ground. Off = recoil only kicks in mid-air, so ground shots don't shove you around.")]
         public bool recoilWhileGrounded = false;
 
+        [Header("Aim stick (gamepad)")]
+        [Tooltip("How far the right stick must be pushed before the bow starts drawing.")]
+        [Range(0.1f, 1f)]
+        public float aimStickEngage = 0.5f;
+        [Tooltip("The stick has to fall back below this before the shot goes off. Kept under the engage threshold so a stick held near the edge can't chatter.")]
+        [Range(0.05f, 1f)]
+        public float aimStickRelease = 0.3f;
+
         [Header("Health")]
         public int maxHealth = 5;
         [Tooltip("Invulnerability seconds after taking a hit.")]
