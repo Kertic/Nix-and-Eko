@@ -29,10 +29,10 @@ namespace NixAndEko.Player
         [Header("Aim stick (gamepad)")]
         [Tooltip("How far the right stick must be pushed before the bow starts drawing.")]
         [Range(0.1f, 1f)]
-        public float aimStickEngage = 0.5f;
-        [Tooltip("The stick has to fall back below this before the shot goes off. Kept under the engage threshold so a stick held near the edge can't chatter.")]
+        public float aimStickEngage = 0.6f;
+        [Tooltip("The stick has to fall back below this before the shot goes off. Kept well under the engage threshold — a wide gap is a big deadzone against unintentional snapback fires from an imprecise release or stick drift.")]
         [Range(0.05f, 1f)]
-        public float aimStickRelease = 0.3f;
+        public float aimStickRelease = 0.15f;
 
         InputAction _move, _look, _aim, _aimHold, _jump, _attack, _crouch, _interact;
 

@@ -33,7 +33,27 @@ namespace NixAndEko.Util
         Texture2D _owned;
 
         void OnEnable() { Rebuild(); }
-        void OnValidate() { if (isActiveAndEnabled) Rebuild(); }
+
+        // Rebuild sets SpriteRenderer.sprite, which internally does a SendMessage — Unity
+        // forbids that while still inside OnValidate, so defer to after it returns.
+        void OnValidate()
+        {
+#if UNITY_EDITOR
+            if (!isActiveAndEnabled) return;
+            UnityEditor.EditorApplication.delayCall += DelayedRebuild;
+#else
+            if (isActiveAndEnabled) Rebuild();
+#endif
+        }
+
+#if UNITY_EDITOR
+        void DelayedRebuild()
+        {
+            UnityEditor.EditorApplication.delayCall -= DelayedRebuild;
+            if (this == null) return;   // destroyed/unloaded before the callback fired
+            Rebuild();
+        }
+#endif
 
         public void Rebuild()
         {

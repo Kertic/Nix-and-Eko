@@ -114,10 +114,14 @@ namespace NixAndEko.Level
         {
             var go = CreateBlockObject("OneWayPlatform", parent, b.position, b.size,
                                        ProceduralSprite.Shape.Plank, layer, 1, SeedFor(b));
-            go.GetComponent<BoxCollider2D>().usedByEffector = true;
+            var col = go.GetComponent<BoxCollider2D>();
+            col.usedByEffector = true;
+            col.edgeRadius = 0.05f;   // rounds corners so skimming an edge (e.g. an adjacent tile's seam) doesn't snag
             var eff = go.AddComponent<PlatformEffector2D>();
             eff.useOneWay = true;
-            eff.surfaceArc = 140f;
+            eff.surfaceArc = 100f;    // a wide pass-through zone so jumping up through it from below can't clip a "solid" contact
+            eff.useSideFriction = false;
+            eff.useSideBounce = false;
             go.AddComponent<OneWayPlatform>().dropSeconds = 0.35f;
         }
 

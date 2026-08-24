@@ -15791,8 +15791,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   config: {fileID: 11400000, guid: 2b838d664a4474c44bc6fb0c849bf87d, type: 2}
-  aimStickEngage: 0.5
-  aimStickRelease: 0.3
+  aimStickEngage: 0.6
+  aimStickRelease: 0.15
 --- !u!61 &806070401
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -15902,10 +15902,8 @@ MonoBehaviour:
     m_Bits: 256
   groundProbe: 0.08
   wallProbe: 0.06
-  currentState: 
-  CoyoteTimer: 0
+  currentState:
   JumpBufferTimer: 0
-  AirJumpsUsed: 0
   InputLockTimer: 0
 --- !u!4 &806070405
 Transform:
@@ -28074,7 +28072,7 @@ PlatformEffector2D:
   m_RotationalOffset: 0
   m_UseOneWay: 1
   m_UseOneWayGrouping: 0
-  m_SurfaceArc: 140
+  m_SurfaceArc: 100
   m_UseSideFriction: 0
   m_UseSideBounce: 0
   m_SideArc: 1
@@ -28123,7 +28121,7 @@ BoxCollider2D:
     adaptiveTiling: 0
   m_AutoTiling: 0
   m_Size: {x: 6, y: 0.4}
-  m_EdgeRadius: 0
+  m_EdgeRadius: 0.05
 --- !u!114 &1414230018
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -38278,7 +38276,7 @@ PlatformEffector2D:
   m_RotationalOffset: 0
   m_UseOneWay: 1
   m_UseOneWayGrouping: 0
-  m_SurfaceArc: 140
+  m_SurfaceArc: 100
   m_UseSideFriction: 0
   m_UseSideBounce: 0
   m_SideArc: 1
@@ -38327,7 +38325,7 @@ BoxCollider2D:
     adaptiveTiling: 0
   m_AutoTiling: 0
   m_Size: {x: 6, y: 0.4}
-  m_EdgeRadius: 0
+  m_EdgeRadius: 0.05
 --- !u!114 &2072912613
 MonoBehaviour:
   m_ObjectHideFlags: 0

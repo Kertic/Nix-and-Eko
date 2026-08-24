@@ -15,8 +15,6 @@ namespace NixAndEko.Player.States
                 return;
             }
 
-            if (TryStartGroundJump()) return;   // coyote-time jump
-            if (TryStartAirJump()) return;
             if (WantsWallSlide()) { P.Machine.ChangeState(P.WallSlide); return; }
 
             P.FaceMoveInput();

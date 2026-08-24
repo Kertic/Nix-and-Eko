@@ -9,8 +9,6 @@ namespace NixAndEko.Player.States
 
         public override void Tick(float dt)
         {
-            if (TryStartGroundJump()) return;
-
             if (!P.Grounded) { P.Machine.ChangeState(P.Fall); return; }
             if (In.CrouchHeld) { P.Machine.ChangeState(P.Crouch); return; }
             if (Mathf.Abs(In.Move.x) > 0.2f) { P.Machine.ChangeState(P.MoveS); return; }

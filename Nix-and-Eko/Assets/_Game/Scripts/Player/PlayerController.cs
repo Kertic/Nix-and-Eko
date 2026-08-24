@@ -46,10 +46,11 @@ namespace NixAndEko.Player
         /// <summary>+1 faces right, -1 faces left.</summary>
         public int Facing { get; private set; } = 1;
 
-        // --- Timers / counters shared between states ---
-        public float CoyoteTimer;
+        // --- Timers shared between states ---
+        /// <summary>Buffers a Jump press briefly so crouch + jump can drop through a one-way
+        /// platform even if the press lands a frame early. There's no button-jump any more —
+        /// this is the platform's only remaining consumer.</summary>
         public float JumpBufferTimer;
-        public int AirJumpsUsed;
         /// <summary>Seconds remaining before horizontal steering input is honored again. Used by
         /// bursts (recoil, dashes) so held input can't immediately cancel the kick out.</summary>
         public float InputLockTimer;
@@ -158,13 +159,6 @@ namespace NixAndEko.Player
 
         void UpdateTimers(float dt)
         {
-            if (Grounded)
-            {
-                CoyoteTimer = Config.coyoteTime;
-                AirJumpsUsed = 0;
-            }
-            else CoyoteTimer -= dt;
-
             if (Input.JumpPressed) JumpBufferTimer = Config.jumpBuffer;
             else JumpBufferTimer -= dt;
 
@@ -173,7 +167,6 @@ namespace NixAndEko.Player
 
         // ------------------------------------------------------------------ Helpers used by states
         public bool BufferedJump => JumpBufferTimer > 0f;
-        public bool CanCoyoteJump => CoyoteTimer > 0f;
 
         public void ConsumeJumpBuffer()
         {

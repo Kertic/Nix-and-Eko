@@ -2,15 +2,13 @@ using UnityEngine;
 
 namespace NixAndEko.Player.States
 {
-    /// <summary>Grounded running. Bow drawing (handled by Bow component) slows the player.</summary>
+    /// <summary>Grounded running.</summary>
     public class MoveState : PlayerStateBase
     {
         public MoveState(PlayerController p) : base(p) { }
 
         public override void Tick(float dt)
         {
-            if (TryStartGroundJump()) return;
-
             if (!P.Grounded) { P.Machine.ChangeState(P.Fall); return; }
             if (In.CrouchHeld) { P.Machine.ChangeState(P.Crouch); return; }
             if (Mathf.Abs(In.Move.x) <= 0.2f) { P.Machine.ChangeState(P.Idle); return; }
@@ -20,10 +18,7 @@ namespace NixAndEko.Player.States
 
         public override void FixedTick(float fdt)
         {
-            float speed = Cfg.moveSpeed;
-            if (In.AttackHeld) speed *= Cfg.drawMoveMultiplier;
-
-            float target = Mathf.Sign(In.Move.x) * speed;
+            float target = Mathf.Sign(In.Move.x) * Cfg.moveSpeed;
             bool accelerating = Mathf.Abs(In.Move.x) > 0.2f;
             P.MoveHorizontal(target, accelerating ? Cfg.groundAccel : Cfg.groundDecel);
 

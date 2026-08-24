@@ -17,25 +17,21 @@ MonoBehaviour:
   groundDecel: 100
   airAccel: 45
   crouchSpeedMultiplier: 0.45
-  jumpHeight: 3.2
   gravityUp: 32
   gravityDown: 42
-  jumpCutGravity: 80
   maxFallSpeed: 16
-  coyoteTime: 0.1
   jumpBuffer: 0.12
-  airJumps: 0
   wallSlideSpeed: 4
   bowDrawTime: 0.2
   arrowMinSpeed: 10
   arrowMaxSpeed: 34
-  drawMoveMultiplier: 0.55
   recoilMin: 4
   recoilMax: 14
   aimHysteresis: 12
-  recoilWhileGrounded: 0
-  aimStickEngage: 0.5
-  aimStickRelease: 0.3
+  recoilWhileGrounded: 1
+  recoilInputLock: 0.08
+  aimStickEngage: 0.6
+  aimStickRelease: 0.15
   maxHealth: 5
   invulnTime: 0.8
   hurtKnockback: 12

@@ -50,8 +50,8 @@ namespace NixAndEko.Combat
         public float recoilMin = 4f;
         [Tooltip("Velocity the player is set to (opposite the shot) at full draw — a dash-style burst, not an add-on. Overridden by PlayerConfig when present.")]
         public float recoilMax = 14f;
-        [Tooltip("Apply recoil while grounded. Overridden by PlayerConfig when present.")]
-        public bool recoilWhileGrounded = false;
+        [Tooltip("Apply recoil while grounded, for downward shots only (S / SW / SE) — that's the \"bow jump\". Sideways/upward ground shots never touch velocity, so running is never interrupted. Overridden by PlayerConfig when present.")]
+        public bool recoilWhileGrounded = true;
         [Tooltip("Seconds of steering input lockout after a recoil burst, so held input can't immediately cancel the kick out. Overridden by PlayerConfig when present.")]
         public float recoilInputLock = 0.08f;
 
@@ -366,11 +366,12 @@ namespace NixAndEko.Combat
         void ApplyRecoil(Vector2 aimDir, float charge)
         {
             if (player == null) return;
-
-            // Standing on the ground, the archer is braced — no recoil kick.
-            if (player.Grounded && !recoilWhileGrounded) return;
-
             if (aimDir.sqrMagnitude < 0.0001f) return;
+
+            // Standing on the ground, only a downward shot (S / SW / SE) triggers recoil —
+            // that's the "bow jump". Sideways/upward ground shots never touch velocity, so
+            // running is never interrupted by grounded recoil.
+            if (player.Grounded && (!recoilWhileGrounded || aimDir.y > -0.5f)) return;
 
             float speed = Mathf.Lerp(recoilMin, recoilMax, charge);
             Vector2 kickDir = (-aimDir).normalized;
@@ -381,9 +382,10 @@ namespace NixAndEko.Combat
 
             player.Velocity = v;
 
-            // If the kick lifts us off the ground, hand control to the airborne states.
-            if (kickDir.y > 0.1f && player.Grounded)
-                player.Machine.ChangeState(player.Fall);
+            // An upward kick gets the floaty "rising" state (lighter gravity, apex hand-off to
+            // Fall) rather than whatever gravity the current state happens to apply.
+            if (kickDir.y > 0.1f)
+                player.Machine.ChangeState(player.Jump);
 
             if (recoilInputLock > 0f) player.LockInput(recoilInputLock);
         }

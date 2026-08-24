@@ -2,21 +2,18 @@ using UnityEngine;
 
 namespace NixAndEko.Player.States
 {
-    /// <summary>Rising portion of a jump. Supports variable height and air control.</summary>
+    /// <summary>
+    /// Rising portion of a bow-recoil launch (there's no button-jump any more — this is entered
+    /// only when <see cref="NixAndEko.Combat.Bow"/> fires a downward shot and kicks the player
+    /// upward). Uses the lighter "up" gravity for a floatier rise, then hands off to
+    /// <see cref="PlayerController.Fall"/> for the heavier descent once the apex is reached.
+    /// </summary>
     public class JumpState : PlayerStateBase
     {
         public JumpState(PlayerController p) : base(p) { }
 
-        public override void Enter()
-        {
-            P.ConsumeJumpBuffer();
-            P.CoyoteTimer = 0f;
-            P.Velocity = new Vector2(P.Velocity.x, Cfg.JumpVelocity);
-        }
-
         public override void Tick(float dt)
         {
-            if (TryStartAirJump()) return;
             P.FaceMoveInput();
 
             // Apex reached (or head-bonk) -> fall.
@@ -28,10 +25,7 @@ namespace NixAndEko.Player.States
         {
             float target = Mathf.Abs(In.Move.x) > 0.2f ? Mathf.Sign(In.Move.x) * Cfg.moveSpeed : 0f;
             P.MoveHorizontal(target, Cfg.airAccel);
-
-            // Variable jump height: cut the rise short when the button is released.
-            float g = In.JumpHeld ? Cfg.gravityUp : Cfg.jumpCutGravity;
-            P.ApplyGravity(g);
+            P.ApplyGravity(Cfg.gravityUp);
         }
     }
 }

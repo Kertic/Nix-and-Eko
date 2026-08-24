@@ -23,9 +23,13 @@ namespace NixAndEko.Environment
         {
             var col = GetComponent<Collider2D>();
             col.usedByEffector = true;
+            if (col is BoxCollider2D box)
+                box.edgeRadius = 0.05f;   // rounds corners so skimming an edge doesn't snag
             var eff = GetComponent<PlatformEffector2D>();
             eff.useOneWay = true;
-            eff.surfaceArc = 140f;
+            eff.surfaceArc = 100f;       // wide pass-through zone so ascending through it can't clip a "solid" contact
+            eff.useSideFriction = false;
+            eff.useSideBounce = false;
         }
 
         /// <summary>Temporarily let a specific collider pass down through this platform.</summary>
