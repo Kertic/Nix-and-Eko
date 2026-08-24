@@ -29,7 +29,13 @@ namespace NixAndEko.Combat
             // Only echo arrows do anything; either way nothing ever sticks into Nix.
             if (arrow == null || !arrow.isEkoArrow) return false;
 
-            if (bow != null) bow.RefreshAirShot();
+            if (bow != null)
+            {
+                bow.RefreshAirShot();
+                // Fling Nix along Eko's aim — aim up-right, get launched up-right. This is the
+                // momentum boost, distinct from Nix's own recoil which kicks opposite the shot.
+                bow.EkoLaunch(arrow.ekoAim, arrow.charge);
+            }
             if (player != null) player.RefillGlide();
             Particle.Burst(transform.position, burstColor, burstCount, burstSpeed);
             return false;

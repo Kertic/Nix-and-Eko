@@ -69,7 +69,7 @@ namespace NixAndEko.Combat
             // Button released: the echo looses what they were holding, then fades. If Nix is
             // sitting on the preview line, the shot homes in on her (aim assist).
             Transform homeTarget = PlayerOnPreviewLine() ? player.transform : null;
-            eko.Loose(bow.ArrowSpeed(_charge), player.Col, homeTarget);
+            eko.Loose(bow.ArrowSpeed(_charge), _charge, player.Col, homeTarget);
             eko.Dismiss();
         }
 

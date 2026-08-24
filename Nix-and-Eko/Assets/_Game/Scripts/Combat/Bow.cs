@@ -436,12 +436,34 @@ namespace NixAndEko.Combat
             if (player.GroundedForRecoil && (!recoilWhileGrounded || aimDir.y > -0.5f)) return;
 
             float speed = Mathf.Lerp(recoilMin, recoilMax, charge);
-            Vector2 kickDir = (-aimDir).normalized;
-            Vector2 v = player.Velocity;
+            // Nix's own recoil kicks opposite the shot.
+            ApplyLaunch((-aimDir).normalized, speed);
+        }
 
+        /// <summary>
+        /// The momentum boost Eko's arrow hands Nix when it catches her — a burst along Eko's aim
+        /// itself (aim up-right, get flung up-right), not opposite it like Nix's own recoil. Scales
+        /// with the charge Eko was holding and reuses the same per-axis override + rising-state feel.
+        /// </summary>
+        public void EkoLaunch(Vector2 aimDir, float charge)
+        {
+            if (aimDir.sqrMagnitude < 0.0001f) return;
+            ApplyLaunch(aimDir.normalized, Mathf.Lerp(recoilMin, recoilMax, charge));
+        }
+
+        /// <summary>
+        /// Set velocity to a clean burst of <paramref name="speed"/> along <paramref name="kickDir"/>,
+        /// per-axis: an axis the kick doesn't touch is left alone, and one it does only overrides
+        /// opposing momentum (same-direction, faster momentum is kept). An upward burst enters the
+        /// floaty rising state, and steering input is briefly locked so held input can't eat it.
+        /// </summary>
+        void ApplyLaunch(Vector2 kickDir, float speed)
+        {
+            if (player == null) return;
+
+            Vector2 v = player.Velocity;
             v.x = ResolveRecoilAxis(v.x, kickDir.x, speed);
             v.y = ResolveRecoilAxis(v.y, kickDir.y, speed);
-
             player.Velocity = v;
 
             // An upward kick gets the floaty "rising" state (lighter gravity, apex hand-off to

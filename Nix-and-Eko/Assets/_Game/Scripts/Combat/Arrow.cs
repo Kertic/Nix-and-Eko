@@ -27,14 +27,19 @@ namespace NixAndEko.Combat
         public bool flyStraight;
         [Tooltip("Fired by Eko — catching Nix with it reloads her air shot instead of doing nothing.")]
         public bool isEkoArrow;
+        [Tooltip("Eko's aim direction — the way Nix gets flung when this arrow catches her (set by Eko).")]
+        public Vector2 ekoAim = Vector2.right;
         [Tooltip("Degrees per second the homing arrow can turn toward its mark (aim assist).")]
         public float homingTurnRate = 720f;
 
         Rigidbody2D _rb;
         Collider2D _col;
         bool _stuck;
-        /// <summary>Collider the arrow passes through until it has physically cleared it — see <see cref="ArmAgainst"/>.</summary>
-        Collider2D _armAgainst;
+        /// <summary>Nix's collider for an Eko arrow — see <see cref="SetCatchTarget"/>.</summary>
+        Collider2D _catchCol;
+        IArrowHittable _catchHittable;
+        /// <summary>The arrow must clear Nix's bounds once before a catch counts (anti free-catch on spawn).</summary>
+        bool _catchArmed;
         /// <summary>When set, the arrow curves toward this and phases through everything else — see <see cref="HomeTo"/>.</summary>
         Transform _homingTarget;
         float _homeSpeed;
@@ -58,16 +63,20 @@ namespace NixAndEko.Combat
         void OnDestroy() => Active.Remove(this);
 
         /// <summary>
-        /// Pass through <paramref name="col"/> until the arrow has physically cleared it, then
-        /// start colliding with it normally. Eko's arrows spawn inside Nix (Eko stands where Nix
-        /// was when she was summoned), so without this an echo shot would instantly hit Nix and
-        /// hand back a free reload; this way the arrow has to actually travel back into her.
+        /// Register Nix as this Eko arrow's catch target. The arrow never physically collides with
+        /// her, so it never shoves her — the momentum boost is applied deliberately by
+        /// <see cref="Bow.EkoLaunch"/> along Eko's aim, not by an incidental collision impulse (that
+        /// would double up on straight shots and be absent on trigger-based homing shots). The
+        /// catch is detected by overlap once the arrow has first cleared her bounds, so an arrow
+        /// spawned on top of her (Eko stands where Nix was) can't hand back a free reload on frame one.
         /// </summary>
-        public void ArmAgainst(Collider2D col)
+        public void SetCatchTarget(Collider2D nixCol)
         {
-            if (col == null || _col == null) return;
-            _armAgainst = col;
-            Physics2D.IgnoreCollision(_col, col, true);
+            if (nixCol == null || _col == null) return;
+            _catchCol = nixCol;
+            _catchHittable = nixCol.GetComponentInParent<IArrowHittable>();
+            _catchArmed = false;
+            Physics2D.IgnoreCollision(_col, nixCol, true);   // never impulse Nix
         }
 
         /// <summary>
@@ -102,21 +111,43 @@ namespace NixAndEko.Combat
         void Update()
         {
             if (_stuck) return;
-
             Orient();
-
-            // Once the arrow is clear of the collider it was launched inside of, let it hit.
-            if (_armAgainst != null && !_col.bounds.Intersects(_armAgainst.bounds))
-            {
-                Physics2D.IgnoreCollision(_col, _armAgainst, false);
-                _armAgainst = null;
-            }
         }
 
         void FixedUpdate()
         {
-            if (_stuck || _homingTarget == null) return;
+            if (_stuck) return;
 
+            TryCatchNix();
+            if (_homingTarget != null) HomingSteer();
+        }
+
+        /// <summary>
+        /// Detect an Eko arrow catching Nix by overlap (physical collision with her is ignored, so
+        /// nothing shoves her). Requires the arrow to have cleared her bounds once first, so a shot
+        /// spawned overlapping her doesn't catch on frame one.
+        /// </summary>
+        void TryCatchNix()
+        {
+            if (_catchCol == null) return;
+
+            bool overlap = _col.bounds.Intersects(_catchCol.bounds);
+            if (!_catchArmed)
+            {
+                if (!overlap) _catchArmed = true;   // cleared her once — a re-entry now counts
+                return;
+            }
+
+            if (overlap)
+            {
+                // OnArrowHit reloads Nix's air shot + glide and applies the EkoLaunch boost.
+                _catchHittable?.OnArrowHit(this);
+                Destroy(gameObject);
+            }
+        }
+
+        void HomingSteer()
+        {
             // Steer the velocity toward the mark at a fixed turn rate — fast enough to guarantee
             // the hit, slow enough to read as a curving arrow rather than a snap.
             Vector2 to = (Vector2)_homingTarget.position - _rb.position;
