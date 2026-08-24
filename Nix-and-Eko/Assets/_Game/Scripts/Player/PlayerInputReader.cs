@@ -13,9 +13,9 @@ namespace NixAndEko.Player
     /// draw, letting it spring back fires — so <see cref="AttackHeld"/> and friends report the
     /// union of the Attack button, that stick gesture, and the aim-hold trigger.
     ///
-    /// Holding the aim-hold trigger (R2) keeps the draw alive after the stick springs back, so
-    /// the aim stays put and the shot only looses when the trigger is released — the same way
-    /// holding the Attack button (Square) already keeps a draw held.
+    /// Holding the aim-hold button (R1) keeps the draw alive after the stick springs back, so
+    /// the aim stays put and the shot only looses when it's released — the same way holding the
+    /// Attack button (Square) already keeps a draw held.
     /// </summary>
     [DefaultExecutionOrder(-100)]   // sample input before anything reads it this frame
     public class PlayerInputReader : MonoBehaviour
@@ -59,15 +59,15 @@ namespace NixAndEko.Player
         public bool AttackHeld { get; private set; }
         public bool AttackReleased { get; private set; }
 
-        /// <summary>True while the aim-hold trigger (R2) is held, pinning the current draw.</summary>
+        /// <summary>True while the aim-hold button (R1) is held, pinning the current draw.</summary>
         public bool AimHoldHeld { get; private set; }
         /// <summary>True while the glide trigger (L2) is held — airborne, this keeps momentum
         /// instead of letting it bleed off on its own.</summary>
         public bool GlideHeld { get; private set; }
 
-        /// <summary>The frame the Eko summon button (L1) went down — plants the phantom.</summary>
+        /// <summary>The frame the Eko summon button (R2) went down — plants the phantom.</summary>
         public bool EkoPressed { get; private set; }
-        /// <summary>True while the Eko summon button (L1) is held; releasing it looses Eko's shot.</summary>
+        /// <summary>True while the Eko summon button (R2) is held; releasing it looses Eko's shot.</summary>
         public bool EkoHeld { get; private set; }
 
         public bool CrouchHeld { get; private set; }

@@ -4,12 +4,14 @@ using UnityEngine;
 namespace NixAndEko.Combat
 {
     /// <summary>
-    /// Drives the Eko phantom from Nix's side: press the summon button (L1) mid-draw to plant an
-    /// echo of her where she stands, hold to keep it there, release to make it loose its shot.
+    /// Drives the Eko phantom from Nix's side: press the summon button (R2) while aiming to plant
+    /// an echo of Nix where she stands, hold to keep the phantom there, release to make them loose
+    /// their shot. Eko (a faerie, they/them) can be summoned even when Nix is out of arrows — the
+    /// reticle just greys out — since Eko fires their own arrow, not one of Nix's.
     ///
     /// Eko is a once-per-airtime resource, exactly like the mid-air bow shot: summoning spends
     /// the charge, and it only comes back by touching the ground. So a phantom planted in mid-air
-    /// is the only one you get until you land — you have to commit to it, let the arrow fly, and
+    /// is the only one you get until you land — you have to commit to it, let their arrow fly, and
     /// get back to solid ground before another is available.
     /// </summary>
     public class EkoSummoner : MonoBehaviour
@@ -43,21 +45,22 @@ namespace NixAndEko.Combat
 
             if (!eko.Active)
             {
-                // A phantom is an echo of a shot being lined up, so there has to be one to echo.
-                if (input.EkoPressed && CanSummon && bow.IsDrawing) Summon();
+                // A phantom is an echo of a shot being lined up, so the bow has to be aimed —
+                // but it needn't be a fireable shot, so this works even out of arrows.
+                if (input.EkoPressed && CanSummon && bow.IsAiming) Summon();
                 return;
             }
 
             if (input.EkoHeld)
             {
-                // Eko holds her draw the whole time she's standing there, so a longer summon
+                // Eko holds their draw the whole time they're standing there, so a longer summon
                 // means a stronger shot — same draw curve as Nix's own bow.
                 _charge = Mathf.Clamp01(_charge + Time.deltaTime / Mathf.Max(0.01f, bow.drawTime));
                 eko.UpdatePreview();
                 return;
             }
 
-            // Button released: the echo looses what it was holding, then fades.
+            // Button released: the echo looses what they were holding, then fades.
             eko.Loose(bow.ArrowSpeed(_charge), player.Col);
             eko.Dismiss();
         }

@@ -3,14 +3,14 @@ using UnityEngine;
 namespace NixAndEko.Combat
 {
     /// <summary>
-    /// Eko: a frozen echo of Nix, summoned mid-draw and pinned in place for as long as the summon
-    /// button is held. She keeps holding the shot Nix was lining up and previews it as a dead
-    /// straight line — Eko's arrows ignore gravity, unlike Nix's arcs — then looses it the moment
-    /// the button is released. If that arrow catches Nix in the air it reloads her air shot (see
-    /// <see cref="EkoArrowTarget"/>).
+    /// Eko: a faerie (they/them) who appears as a frozen echo of Nix, summoned while she aims and
+    /// pinned in place for as long as the summon button is held. They keep holding the shot Nix
+    /// was lining up and preview it as a dead straight line — Eko's arrows ignore gravity, unlike
+    /// Nix's arcs — then loose it the moment the button is released. If that arrow catches Nix in
+    /// the air it reloads her air shot (see <see cref="EkoArrowTarget"/>).
     ///
-    /// Lives in world space rather than parented to Nix, so she stays put while Nix flies off.
-    /// The object is kept around inactive between summons instead of being rebuilt each time.
+    /// Lives in world space rather than parented to Nix, so the phantom stays put while Nix flies
+    /// off. The object is kept around inactive between summons instead of being rebuilt each time.
     /// </summary>
     public class Eko : MonoBehaviour
     {
@@ -23,7 +23,7 @@ namespace NixAndEko.Combat
         [Header("Look")]
         [Tooltip("How far the straight-shot preview reaches before giving up.")]
         public float previewDistance = 40f;
-        [Tooltip("Eko renders as a translucent blue echo of Nix.")]
+        [Tooltip("Eko renders as a translucent blue echo of Nix's silhouette.")]
         public Color tint = new Color(0.35f, 0.75f, 1f, 0.55f);
         public Color previewColor = new Color(0.35f, 0.75f, 1f, 0.9f);
 
@@ -34,7 +34,7 @@ namespace NixAndEko.Combat
 
         LayerMask _mask;
 
-        /// <summary>Plant the phantom, frozen at <paramref name="position"/> aiming along <paramref name="aim"/>.</summary>
+        /// <summary>Plant the phantom, frozen at <paramref name="position"/> aiming along <paramref name="aim"/>. <paramref name="facing"/> mirrors their silhouette to match Nix.</summary>
         public void Summon(Vector3 position, Vector2 aim, int facing, LayerMask groundMask)
         {
             transform.position = position;
@@ -102,7 +102,7 @@ namespace NixAndEko.Combat
             return arrow;
         }
 
-        /// <summary>Send the phantom away without firing (or after firing).</summary>
+        /// <summary>Send the phantom away without firing (or after they fire).</summary>
         public void Dismiss()
         {
             Active = false;

@@ -103,8 +103,35 @@ namespace NixAndEko.Combat
                 transform.right = v.normalized;
         }
 
-        void OnCollisionEnter2D(Collision2D collision) => Impact(collision.collider, collision.GetContact(0).point);
-        void OnTriggerEnter2D(Collider2D other) => Impact(other, transform.position);
+        void OnCollisionEnter2D(Collision2D collision)
+        {
+            Vector2 point = collision.GetContact(0).point;
+            if (!MovingInto(point)) return;
+            Impact(collision.collider, point);
+        }
+
+        void OnTriggerEnter2D(Collider2D other)
+        {
+            // Triggers don't give a contact point; the nearest point on the other collider is
+            // the closest stand-in for "where would we touch it".
+            Vector2 point = other.ClosestPoint(transform.position);
+            if (!MovingInto(point)) return;
+            Impact(other, point);
+        }
+
+        /// <summary>
+        /// True only when the arrow is actually flying toward <paramref name="point"/> — i.e. the
+        /// hit is ahead of it along its travel vector, not behind or beside it. Stops an arrow
+        /// that spawns already overlapping something (the muzzle, a wall corner, the ground under
+        /// a grounded shot) from instantly sticking to a surface it's really moving away from:
+        /// moving right, it only catches things to its right; moving up, only things above; etc.
+        /// </summary>
+        bool MovingInto(Vector2 point)
+        {
+            Vector2 v = _rb.linearVelocity;
+            if (v.sqrMagnitude < 0.0001f) return true;   // not moving: no direction to gate on
+            return Vector2.Dot(v, point - (Vector2)transform.position) > 0f;
+        }
 
         void Impact(Collider2D other, Vector2 point)
         {

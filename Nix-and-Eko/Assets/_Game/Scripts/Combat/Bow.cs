@@ -71,9 +71,18 @@ namespace NixAndEko.Combat
         public float indicatorFarDistance = 1.6f;
         public Color chargeStartColor = new Color(1f, 1f, 1f, 0.6f);
         public Color chargeFullColor = new Color(1f, 0.35f, 0.35f, 1f);
+        [Tooltip("Reticle tint when the air shot is spent — aim still shows (greyed) so Eko can be lined up.")]
+        public Color noAmmoColor = new Color(0.55f, 0.6f, 0.7f, 0.5f);
 
         public float Charge { get; private set; }   // 0..1
+        /// <summary>True while actually charging a shot that can be fired (held + has ammo).</summary>
         public bool IsDrawing { get; private set; }
+        /// <summary>
+        /// True whenever the bow is being aimed — held down — regardless of whether there's a
+        /// shot to fire. Out of ammo the reticle still tracks and greys out (so Eko can be lined
+        /// up), but <see cref="IsDrawing"/> stays false and nothing charges.
+        /// </summary>
+        public bool IsAiming { get; private set; }
         /// <summary>The current snapped aim direction (unit vector).</summary>
         public Vector2 AimDirection { get; private set; } = Vector2.right;
 
@@ -127,12 +136,22 @@ namespace NixAndEko.Combat
             AimDirection = ResolveAim();
             UpdateIndicator();
 
-            if (input.AttackHeld && CanFire)
+            if (input.AttackHeld)
             {
-                IsDrawing = true;
-                Charge = Mathf.Clamp01(Charge + Time.deltaTime / Mathf.Max(0.01f, drawTime));
+                IsAiming = true;
+                // Face the aim whether or not there's a shot to fire, so Eko's formation reads.
                 if (player != null && Mathf.Abs(AimDirection.x) > 0.1f)
                     player.SetFacing(AimDirection.x > 0 ? 1 : -1);
+
+                if (CanFire)
+                {
+                    IsDrawing = true;
+                    Charge = Mathf.Clamp01(Charge + Time.deltaTime / Mathf.Max(0.01f, drawTime));
+                }
+            }
+            else
+            {
+                IsAiming = false;
             }
 
             if (input.AttackReleased)
@@ -140,6 +159,7 @@ namespace NixAndEko.Combat
                 if (IsDrawing && CanFire) Fire(AimDirection, Charge);
                 Charge = 0f;
                 IsDrawing = false;
+                IsAiming = false;
                 _aimFromStick = false;   // the next gesture picks its own source
             }
         }
@@ -266,14 +286,18 @@ namespace NixAndEko.Combat
         {
             if (aimIndicator != null)
             {
-                aimIndicator.gameObject.SetActive(IsDrawing);
-                if (IsDrawing)
+                aimIndicator.gameObject.SetActive(IsAiming);
+                if (IsAiming)
                 {
                     float dist = Mathf.Lerp(indicatorNearDistance, indicatorFarDistance, Charge);
                     aimIndicator.position = Origin + (Vector3)AimDirection * dist;
                     aimIndicator.right = AimDirection;
                     if (aimIndicatorRenderer != null)
-                        aimIndicatorRenderer.color = Color.Lerp(chargeStartColor, chargeFullColor, Charge);
+                        // Greyed out when the air shot is spent — the reticle still shows so Eko
+                        // can be aimed, but it reads as "no arrow to fire".
+                        aimIndicatorRenderer.color = CanFire
+                            ? Color.Lerp(chargeStartColor, chargeFullColor, Charge)
+                            : noAmmoColor;
                 }
             }
 
