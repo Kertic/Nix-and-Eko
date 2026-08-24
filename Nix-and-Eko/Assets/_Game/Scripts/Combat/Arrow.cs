@@ -31,6 +31,9 @@ namespace NixAndEko.Combat
         public Vector2 ekoAim = Vector2.right;
         [Tooltip("Degrees per second the homing arrow can turn toward its mark (aim assist).")]
         public float homingTurnRate = 720f;
+        [Tooltip("Max seconds a homing arrow chases before giving up and despawning, so a shot " +
+                 "that can't connect doesn't orbit forever.")]
+        public float homingLifetime = 2.5f;
 
         Rigidbody2D _rb;
         Collider2D _col;
@@ -43,6 +46,7 @@ namespace NixAndEko.Combat
         /// <summary>When set, the arrow curves toward this and phases through everything else — see <see cref="HomeTo"/>.</summary>
         Transform _homingTarget;
         float _homeSpeed;
+        float _homingAge;
 
         /// <summary>
         /// Every live arrow, so a freshly fired one can be told to pass through the others.
@@ -87,6 +91,11 @@ namespace NixAndEko.Combat
         public void HomeTo(Transform target)
         {
             _homingTarget = target;
+            // A homing arrow curves *into* Nix, so it can't rely on the "clear her bounds first"
+            // guard (it would never clear, and would orbit her forever). Aim assist only engages
+            // past a minimum range (see EkoSummoner), so arming immediately can't self-catch on
+            // spawn either.
+            _catchArmed = true;
             if (_col != null) _col.isTrigger = true;   // pass through walls; still reports overlaps
         }
 
@@ -118,36 +127,42 @@ namespace NixAndEko.Combat
         {
             if (_stuck) return;
 
-            TryCatchNix();
+            if (TryCatchNix()) return;                 // arrow consumed itself catching Nix
             if (_homingTarget != null) HomingSteer();
         }
 
         /// <summary>
         /// Detect an Eko arrow catching Nix by overlap (physical collision with her is ignored, so
         /// nothing shoves her). Requires the arrow to have cleared her bounds once first, so a shot
-        /// spawned overlapping her doesn't catch on frame one.
+        /// spawned overlapping her doesn't catch on frame one. Returns true (and destroys the arrow)
+        /// on a catch.
         /// </summary>
-        void TryCatchNix()
+        bool TryCatchNix()
         {
-            if (_catchCol == null) return;
+            if (_catchCol == null) return false;
 
             bool overlap = _col.bounds.Intersects(_catchCol.bounds);
             if (!_catchArmed)
             {
                 if (!overlap) _catchArmed = true;   // cleared her once — a re-entry now counts
-                return;
+                return false;
             }
 
-            if (overlap)
-            {
-                // OnArrowHit reloads Nix's air shot + glide and applies the EkoLaunch boost.
-                _catchHittable?.OnArrowHit(this);
-                Destroy(gameObject);
-            }
+            if (!overlap) return false;
+
+            // OnArrowHit reloads Nix's air shot + glide and applies the EkoLaunch boost.
+            _catchHittable?.OnArrowHit(this);
+            Destroy(gameObject);
+            return true;
         }
 
         void HomingSteer()
         {
+            // A chase that can't connect (target gone, or Nix out-running it) despawns instead of
+            // orbiting for the arrow's whole flight lifetime.
+            _homingAge += Time.fixedDeltaTime;
+            if (_homingTarget == null || _homingAge >= homingLifetime) { Destroy(gameObject); return; }
+
             // Steer the velocity toward the mark at a fixed turn rate — fast enough to guarantee
             // the hit, slow enough to read as a curving arrow rather than a snap.
             Vector2 to = (Vector2)_homingTarget.position - _rb.position;

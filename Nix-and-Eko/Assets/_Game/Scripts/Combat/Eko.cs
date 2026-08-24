@@ -80,11 +80,12 @@ namespace NixAndEko.Combat
 
         /// <summary>
         /// Loose the held shot along the frozen aim. <paramref name="nixCol"/> is Nix's collider,
-        /// registered as the catch target: the arrow never physically shoves her (the boost is a
-        /// deliberate launch along the aim, applied on catch) and only counts once it has cleared
-        /// her bounds, so a shot spawned where she was standing can't self-catch. When
-        /// <paramref name="homeTarget"/> is set (aim assist — Nix was on the preview line at
-        /// release), the arrow curves to her and phases through everything else so it always lands.
+        /// registered as the catch target: the arrow never physically shoves her — the boost is a
+        /// deliberate launch along the aim, applied on catch. A straight shot must clear her bounds
+        /// once before it can catch, so one spawned where she was standing can't self-catch. When
+        /// <paramref name="homeTarget"/> is set (aim assist — Nix was on the preview line, past the
+        /// min range, at release), the arrow curves to her and phases through everything else so it
+        /// always lands (it arms immediately, since the min range rules out a point-blank self-catch).
         /// </summary>
         public Arrow Loose(float speed, float charge, Collider2D nixCol, Transform homeTarget = null)
         {

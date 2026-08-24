@@ -27,6 +27,9 @@ namespace NixAndEko.Combat
                  "release for the shot to home in on her. Roughly her own width feels forgiving " +
                  "without auto-hitting from way off the line.")]
         public float assistRadius = 1.25f;
+        [Tooltip("Nix must be at least this far ahead of Eko along the line for a homing shot — " +
+                 "point-blank the arrow has no room to travel, so a normal shot handles it.")]
+        public float assistMinDistance = 1.5f;
 
         /// <summary>False once a phantom has been summoned, until Nix next touches the ground.</summary>
         public bool CanSummon => !_spent;
@@ -86,7 +89,8 @@ namespace NixAndEko.Combat
             Vector2 toPlayer = (Vector2)player.transform.position - origin;
 
             float along = Vector2.Dot(toPlayer, dir);
-            if (along < 0f || along > eko.previewDistance) return false;   // behind Eko or too far
+            // Behind Eko, point-blank, or past the preview's reach: no homing.
+            if (along < assistMinDistance || along > eko.previewDistance) return false;
 
             Vector2 perp = toPlayer - dir * along;
             return perp.magnitude <= assistRadius;
