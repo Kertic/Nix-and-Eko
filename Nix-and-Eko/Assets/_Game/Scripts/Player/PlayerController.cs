@@ -50,6 +50,9 @@ namespace NixAndEko.Player
         public float CoyoteTimer;
         public float JumpBufferTimer;
         public int AirJumpsUsed;
+        /// <summary>Seconds remaining before horizontal steering input is honored again. Used by
+        /// bursts (recoil, dashes) so held input can't immediately cancel the kick out.</summary>
+        public float InputLockTimer;
 
         // --- States ---
         public IdleState Idle { get; private set; }
@@ -165,6 +168,7 @@ namespace NixAndEko.Player
             if (Input.JumpPressed) JumpBufferTimer = Config.jumpBuffer;
             else JumpBufferTimer -= dt;
 
+            if (InputLockTimer > 0f) InputLockTimer -= dt;
         }
 
         // ------------------------------------------------------------------ Helpers used by states
@@ -177,13 +181,20 @@ namespace NixAndEko.Player
             Input.ConsumeJump();
         }
 
-        /// <summary>Accelerate horizontal velocity toward <paramref name="targetSpeed"/>.</summary>
+        /// <summary>Accelerate horizontal velocity toward <paramref name="targetSpeed"/>.
+        /// No-ops while <see cref="InputLockTimer"/> is running, so steering input can't
+        /// immediately eat into a burst (recoil, dash, etc.) that just set the velocity.</summary>
         public void MoveHorizontal(float targetSpeed, float accel)
         {
+            if (InputLockTimer > 0f) return;
+
             float v = Velocity.x;
             v = Mathf.MoveTowards(v, targetSpeed, accel * Time.fixedDeltaTime);
             Velocity = new Vector2(v, Velocity.y);
         }
+
+        /// <summary>Suppress horizontal steering input for at least <paramref name="seconds"/>.</summary>
+        public void LockInput(float seconds) => InputLockTimer = Mathf.Max(InputLockTimer, seconds);
 
         /// <summary>Apply manual gravity, clamped to max fall speed.</summary>
         public void ApplyGravity(float gravity)

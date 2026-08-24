@@ -46,12 +46,14 @@ namespace NixAndEko.Combat
         public float dragDeadzonePixels = 14f;
 
         [Header("Recoil")]
-        [Tooltip("Speed applied to the player opposite the shot at zero draw. Overridden by PlayerConfig when present.")]
+        [Tooltip("Velocity the player is set to (opposite the shot) at zero draw — a dash-style burst, not an add-on. Overridden by PlayerConfig when present.")]
         public float recoilMin = 4f;
-        [Tooltip("Speed applied to the player opposite the shot at full draw. Overridden by PlayerConfig when present.")]
+        [Tooltip("Velocity the player is set to (opposite the shot) at full draw — a dash-style burst, not an add-on. Overridden by PlayerConfig when present.")]
         public float recoilMax = 14f;
         [Tooltip("Apply recoil while grounded. Overridden by PlayerConfig when present.")]
         public bool recoilWhileGrounded = false;
+        [Tooltip("Seconds of steering input lockout after a recoil burst, so held input can't immediately cancel the kick out. Overridden by PlayerConfig when present.")]
+        public float recoilInputLock = 0.08f;
 
         [Header("Ammo")]
         [Tooltip("Only one shot per airtime: after firing mid-air the bow is spent until the archer lands.")]
@@ -105,6 +107,7 @@ namespace NixAndEko.Combat
                 recoilMin = player.Config.recoilMin;
                 recoilMax = player.Config.recoilMax;
                 recoilWhileGrounded = player.Config.recoilWhileGrounded;
+                recoilInputLock = player.Config.recoilInputLock;
                 aimHysteresis = player.Config.aimHysteresis;
             }
         }
@@ -350,32 +353,56 @@ namespace NixAndEko.Combat
         }
 
         /// <summary>
-        /// Push the player opposite the shot — shooting downward pogo-jumps you upward,
-        /// shooting left flings you right, etc. Scales with draw charge.
+        /// Recoil overrides the player's velocity opposite the shot — like a Celeste dash or
+        /// double jump, it's a clean burst to a fixed speed rather than a shove added on top of
+        /// whatever you were already carrying. Shooting downward launches you upward at a
+        /// consistent speed, shooting left sends you right at a consistent speed, etc. Scales
+        /// with draw charge. An axis the kick doesn't touch (e.g. horizontal, for a straight-down
+        /// shot) is left alone entirely, and an axis it does touch only overrides momentum that
+        /// opposes it — sailing right and firing straight down keeps that rightward speed instead
+        /// of zeroing it. Steering input is briefly locked out afterward so held input can't
+        /// immediately eat into the burst.
         /// </summary>
         void ApplyRecoil(Vector2 aimDir, float charge)
         {
             if (player == null) return;
 
-            // Standing on the ground, the archer is braced — no recoil shove.
+            // Standing on the ground, the archer is braced — no recoil kick.
             if (player.Grounded && !recoilWhileGrounded) return;
 
-            float recoil = Mathf.Lerp(recoilMin, recoilMax, charge);
-            Vector2 kick = -aimDir * recoil;
+            if (aimDir.sqrMagnitude < 0.0001f) return;
+
+            float speed = Mathf.Lerp(recoilMin, recoilMax, charge);
+            Vector2 kickDir = (-aimDir).normalized;
             Vector2 v = player.Velocity;
 
-            // Vertical: an upward kick replaces any downward speed (a clean pogo boost);
-            // a downward kick just adds.
-            if (kick.y > 0f) v.y = Mathf.Max(v.y, 0f) + kick.y;
-            else v.y += kick.y;
-
-            v.x += kick.x;
+            v.x = ResolveRecoilAxis(v.x, kickDir.x, speed);
+            v.y = ResolveRecoilAxis(v.y, kickDir.y, speed);
 
             player.Velocity = v;
 
             // If the kick lifts us off the ground, hand control to the airborne states.
-            if (kick.y > 0.1f && player.Grounded)
+            if (kickDir.y > 0.1f && player.Grounded)
                 player.Machine.ChangeState(player.Fall);
+
+            if (recoilInputLock > 0f) player.LockInput(recoilInputLock);
+        }
+
+        /// <summary>
+        /// Blends the recoil burst onto one axis of existing velocity. A kick with (near) zero
+        /// component on this axis doesn't touch it at all. Otherwise it overrides — unless
+        /// existing momentum already runs the same direction as the kick and is faster, in which
+        /// case momentum wins and isn't dampened.
+        /// </summary>
+        static float ResolveRecoilAxis(float current, float kickAxis, float speed)
+        {
+            if (Mathf.Abs(kickAxis) < 0.001f) return current;
+
+            float target = kickAxis * speed;
+            if (Mathf.Sign(current) == Mathf.Sign(target) && Mathf.Abs(current) > Mathf.Abs(target))
+                return current;
+
+            return target;
         }
     }
 }

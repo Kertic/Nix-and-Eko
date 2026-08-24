@@ -55,15 +55,17 @@ namespace NixAndEko.Player
         [Tooltip("Horizontal move speed multiplier while drawing the bow.")]
         [Range(0f, 1f)]
         public float drawMoveMultiplier = 0.55f;
-        [Tooltip("Recoil speed applied opposite the shot at zero draw.")]
+        [Tooltip("Recoil: velocity the player is set to (opposite the shot) at zero draw — a dash-style burst, not an add-on.")]
         public float recoilMin = 4f;
-        [Tooltip("Recoil speed applied opposite the shot at full draw.")]
+        [Tooltip("Recoil: velocity the player is set to (opposite the shot) at full draw — a dash-style burst, not an add-on.")]
         public float recoilMax = 14f;
         [Tooltip("Extra degrees past a 45° sector boundary the aim must travel before snapping to the next direction (anti-flicker).")]
         [Range(0f, 22f)]
         public float aimHysteresis = 12f;
         [Tooltip("Apply firing recoil while standing on the ground. Off = recoil only kicks in mid-air, so ground shots don't shove you around.")]
         public bool recoilWhileGrounded = false;
+        [Tooltip("Seconds of steering input lockout after a recoil burst, so held input can't immediately cancel the kick out.")]
+        public float recoilInputLock = 0.08f;
 
         [Header("Aim stick (gamepad)")]
         [Tooltip("How far the right stick must be pushed before the bow starts drawing.")]
