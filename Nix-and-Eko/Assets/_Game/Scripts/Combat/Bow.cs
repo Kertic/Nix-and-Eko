@@ -332,7 +332,13 @@ namespace NixAndEko.Combat
         /// anything less — including no charge at all — fires at the flat <see cref="minSpeed"/>.
         /// There's no in-between force.
         /// </summary>
-        float ArrowSpeed(float charge) => charge >= 1f ? maxSpeed : minSpeed;
+        public float ArrowSpeed(float charge) => charge >= 1f ? maxSpeed : minSpeed;
+
+        /// <summary>
+        /// Reload the mid-air shot without touching the ground — what happens when one of Eko's
+        /// arrows catches Nix in flight.
+        /// </summary>
+        public void RefreshAirShot() => _shotSpent = false;
 
         void Fire(Vector2 aimDir, float charge)
         {

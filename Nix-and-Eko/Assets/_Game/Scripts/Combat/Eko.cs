@@ -1,0 +1,113 @@
+using UnityEngine;
+
+namespace NixAndEko.Combat
+{
+    /// <summary>
+    /// Eko: a frozen echo of Nix, summoned mid-draw and pinned in place for as long as the summon
+    /// button is held. She keeps holding the shot Nix was lining up and previews it as a dead
+    /// straight line — Eko's arrows ignore gravity, unlike Nix's arcs — then looses it the moment
+    /// the button is released. If that arrow catches Nix in the air it reloads her air shot (see
+    /// <see cref="EkoArrowTarget"/>).
+    ///
+    /// Lives in world space rather than parented to Nix, so she stays put while Nix flies off.
+    /// The object is kept around inactive between summons instead of being rebuilt each time.
+    /// </summary>
+    public class Eko : MonoBehaviour
+    {
+        [Header("References")]
+        public SpriteRenderer sprite;
+        [Tooltip("Straight-line preview of the shot Eko is holding.")]
+        public LineRenderer trajectory;
+        public Arrow arrowPrefab;
+
+        [Header("Look")]
+        [Tooltip("How far the straight-shot preview reaches before giving up.")]
+        public float previewDistance = 40f;
+        [Tooltip("Eko renders as a translucent blue echo of Nix.")]
+        public Color tint = new Color(0.35f, 0.75f, 1f, 0.55f);
+        public Color previewColor = new Color(0.35f, 0.75f, 1f, 0.9f);
+
+        /// <summary>True while a phantom is standing in the world.</summary>
+        public bool Active { get; private set; }
+        /// <summary>The frozen aim direction — Eko never re-aims after being summoned.</summary>
+        public Vector2 AimDirection { get; private set; } = Vector2.right;
+
+        LayerMask _mask;
+
+        /// <summary>Plant the phantom, frozen at <paramref name="position"/> aiming along <paramref name="aim"/>.</summary>
+        public void Summon(Vector3 position, Vector2 aim, int facing, LayerMask groundMask)
+        {
+            transform.position = position;
+            AimDirection = aim.sqrMagnitude > 0.0001f ? aim.normalized : Vector2.right;
+            _mask = groundMask;
+
+            if (sprite != null)
+            {
+                sprite.color = tint;
+                Vector3 s = sprite.transform.localScale;
+                s.x = Mathf.Abs(s.x) * (facing >= 0 ? 1 : -1);
+                sprite.transform.localScale = s;
+            }
+
+            Active = true;
+            gameObject.SetActive(true);
+            UpdatePreview();
+        }
+
+        /// <summary>
+        /// Redraw the shot preview. A straight arrow needs no arc simulation — a single raycast
+        /// gives the exact flight path and the surface it stops at.
+        /// </summary>
+        public void UpdatePreview()
+        {
+            if (trajectory == null) return;
+
+            Vector2 origin = transform.position;
+            Vector2 end = origin + AimDirection * previewDistance;
+
+            if (_mask.value != 0)
+            {
+                var hit = Physics2D.Raycast(origin, AimDirection, previewDistance, _mask);
+                if (hit.collider != null) end = hit.point;
+            }
+
+            trajectory.positionCount = 2;
+            trajectory.SetPosition(0, origin);
+            trajectory.SetPosition(1, end);
+            trajectory.startColor = previewColor;
+            trajectory.endColor = new Color(previewColor.r, previewColor.g, previewColor.b, 0f);
+        }
+
+        /// <summary>
+        /// Loose the held shot along the frozen aim. <paramref name="armAgainst"/> is Nix's
+        /// collider: the arrow spawns where she was standing when Eko was summoned, so it passes
+        /// through her until it has cleared her, and only then can catch her on the way back.
+        /// </summary>
+        public Arrow Loose(float speed, Collider2D armAgainst)
+        {
+            if (arrowPrefab == null)
+            {
+                Debug.LogWarning("[Eko] No arrow prefab assigned.", this);
+                return null;
+            }
+
+            Quaternion rot = Quaternion.FromToRotation(Vector3.right, AimDirection);
+            Arrow arrow = Instantiate(arrowPrefab, transform.position, rot);
+            arrow.gameObject.SetActive(true);   // the template is inactive; copies must run
+
+            arrow.flyStraight = true;
+            arrow.isEkoArrow = true;
+            arrow.ArmAgainst(armAgainst);
+            arrow.Launch(AimDirection * speed, 1f);
+            return arrow;
+        }
+
+        /// <summary>Send the phantom away without firing (or after firing).</summary>
+        public void Dismiss()
+        {
+            Active = false;
+            if (trajectory != null) trajectory.positionCount = 0;
+            gameObject.SetActive(false);
+        }
+    }
+}

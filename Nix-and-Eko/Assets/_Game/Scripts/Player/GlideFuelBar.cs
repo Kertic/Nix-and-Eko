@@ -4,8 +4,8 @@ using UnityEngine;
 namespace NixAndEko.Player
 {
     /// <summary>
-    /// A small two-part meter (dark backing + colored fill) that floats under the player and
-    /// shows remaining glide fuel. Built from procedural sprites in code, like the rest of the
+    /// A small two-part meter (dark backing + colored fill) that floats above the player's head
+    /// and shows remaining glide fuel. Built from procedural sprites in code, like the rest of the
     /// placeholder art — no art asset to keep in sync. Parented directly under the player root
     /// (not the flipping <see cref="PlayerController.spriteRoot"/>), so it never mirrors with
     /// facing.
@@ -20,7 +20,7 @@ namespace NixAndEko.Player
         public PlayerController player;
 
         [Header("Placement")]
-        public Vector2 offset = new Vector2(0f, -0.6f);
+        public Vector2 offset = new Vector2(0f, 0.72f);
         public int widthPixels = 26;
         [Tooltip("Vertical thickness of the bar strip, in pixels.")]
         public int thicknessPixels = 3;

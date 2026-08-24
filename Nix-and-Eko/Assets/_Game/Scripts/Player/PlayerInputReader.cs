@@ -34,7 +34,7 @@ namespace NixAndEko.Player
         [Range(0.05f, 1f)]
         public float aimStickRelease = 0.15f;
 
-        InputAction _move, _look, _aim, _aimHold, _glide, _jump, _attack, _crouch, _interact;
+        InputAction _move, _look, _aim, _aimHold, _glide, _eko, _jump, _attack, _crouch, _interact;
 
         public Vector2 Move { get; private set; }
         /// <summary>Right-stick / look vector. Unused by the bow (which reads <see cref="AimStickDirection"/>); kept for future use.</summary>
@@ -65,6 +65,11 @@ namespace NixAndEko.Player
         /// instead of letting it bleed off on its own.</summary>
         public bool GlideHeld { get; private set; }
 
+        /// <summary>The frame the Eko summon button (L1) went down — plants the phantom.</summary>
+        public bool EkoPressed { get; private set; }
+        /// <summary>True while the Eko summon button (L1) is held; releasing it looses Eko's shot.</summary>
+        public bool EkoHeld { get; private set; }
+
         public bool CrouchHeld { get; private set; }
         public bool InteractPressed { get; private set; }
 
@@ -91,6 +96,7 @@ namespace NixAndEko.Player
             _aim = map.FindAction("Aim");
             _aimHold = map.FindAction("AimHold");
             _glide = map.FindAction("Glide");
+            _eko = map.FindAction("Eko");
             _jump = map.FindAction("Jump");
             _attack = map.FindAction("Attack");
             _crouch = map.FindAction("Crouch");
@@ -106,6 +112,8 @@ namespace NixAndEko.Player
             AimStickActive = false;
             AimHoldHeld = false;
             GlideHeld = false;
+            EkoHeld = false;
+            EkoPressed = false;
             _attackHeldLast = false;
         }
 
@@ -120,6 +128,9 @@ namespace NixAndEko.Player
 
             AimHoldHeld = _aimHold != null && _aimHold.IsPressed();
             GlideHeld = _glide != null && _glide.IsPressed();
+
+            EkoPressed = _eko != null && _eko.WasPressedThisFrame();
+            EkoHeld = _eko != null && _eko.IsPressed();
 
             UpdateAimStick();
             UpdateAttack();

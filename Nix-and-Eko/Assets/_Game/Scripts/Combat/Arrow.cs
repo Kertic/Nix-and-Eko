@@ -22,9 +22,17 @@ namespace NixAndEko.Combat
         [Header("Charge (0..1), set by the Bow at launch")]
         [Range(0f, 1f)] public float charge;
 
+        [Header("Eko")]
+        [Tooltip("Ignore gravity and fly dead straight. Eko's arrows do this; Nix's arc.")]
+        public bool flyStraight;
+        [Tooltip("Fired by Eko — catching Nix with it reloads her air shot instead of doing nothing.")]
+        public bool isEkoArrow;
+
         Rigidbody2D _rb;
         Collider2D _col;
         bool _stuck;
+        /// <summary>Collider the arrow passes through until it has physically cleared it — see <see cref="ArmAgainst"/>.</summary>
+        Collider2D _armAgainst;
 
         /// <summary>
         /// Every live arrow, so a freshly fired one can be told to pass through the others.
@@ -44,10 +52,24 @@ namespace NixAndEko.Combat
 
         void OnDestroy() => Active.Remove(this);
 
-        /// <summary>Launch the arrow. Called by the Bow.</summary>
+        /// <summary>
+        /// Pass through <paramref name="col"/> until the arrow has physically cleared it, then
+        /// start colliding with it normally. Eko's arrows spawn inside Nix (Eko stands where Nix
+        /// was when she was summoned), so without this an echo shot would instantly hit Nix and
+        /// hand back a free reload; this way the arrow has to actually travel back into her.
+        /// </summary>
+        public void ArmAgainst(Collider2D col)
+        {
+            if (col == null || _col == null) return;
+            _armAgainst = col;
+            Physics2D.IgnoreCollision(_col, col, true);
+        }
+
+        /// <summary>Launch the arrow. Called by the Bow (and by Eko).</summary>
         public void Launch(Vector2 velocity, float chargeAmount)
         {
             charge = chargeAmount;
+            _rb.gravityScale = flyStraight ? 0f : gravityScale;
 
             // Never collide with another arrow — set before the next physics step so no impulse lands.
             foreach (Arrow other in Active)
@@ -62,7 +84,16 @@ namespace NixAndEko.Combat
 
         void Update()
         {
-            if (!_stuck) Orient();
+            if (_stuck) return;
+
+            Orient();
+
+            // Once the arrow is clear of the collider it was launched inside of, let it hit.
+            if (_armAgainst != null && !_col.bounds.Intersects(_armAgainst.bounds))
+            {
+                Physics2D.IgnoreCollision(_col, _armAgainst, false);
+                _armAgainst = null;
+            }
         }
 
         void Orient()

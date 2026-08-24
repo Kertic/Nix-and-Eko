@@ -56,15 +56,33 @@ namespace NixAndEko.Level
             health.config = config;
             health.killY = killY;
 
-            BuildBow(go, controller, reader, arrowTemplate);
+            Bow bow = BuildBow(go, controller, reader, arrowTemplate);
             BuildGlideFuelBar(go, controller);
+
+            // Wind streaks trailing behind her while gliding.
+            var wind = go.AddComponent<WindStreaks>();
+            wind.player = controller;
+
+            // Eko lives in world space (under the level root, not the player) so the phantom
+            // stays frozen where it was planted while Nix flies off.
+            Eko eko = BuildEko(parent, arrowTemplate);
+
+            var summoner = go.AddComponent<EkoSummoner>();
+            summoner.player = controller;
+            summoner.input = reader;
+            summoner.bow = bow;
+            summoner.eko = eko;
+
+            // Lets Eko's arrows catch Nix and reload her air shot.
+            var ekoTarget = go.AddComponent<EkoArrowTarget>();
+            ekoTarget.bow = bow;
 
             go.SetActive(true);   // everything is wired; let the components wake
             return controller;
         }
 
-        static void BuildBow(GameObject playerGo, PlayerController controller,
-                             PlayerInputReader reader, Arrow arrowTemplate)
+        static Bow BuildBow(GameObject playerGo, PlayerController controller,
+                            PlayerInputReader reader, Arrow arrowTemplate)
         {
             var bowGo = new GameObject("Bow");
             bowGo.transform.SetParent(playerGo.transform, false);
@@ -125,6 +143,44 @@ namespace NixAndEko.Level
             anchorPs.Rebuild();
             anchorGo.SetActive(false);
             bow.dragAnchorIndicator = anchorGo.transform;
+
+            return bow;
+        }
+
+        /// <summary>
+        /// The Eko phantom: a translucent blue echo of Nix that gets planted in the world, plus
+        /// its straight-line shot preview. Built once and kept inactive between summons.
+        /// </summary>
+        static Eko BuildEko(Transform parent, Arrow arrowTemplate)
+        {
+            var go = new GameObject("Eko");
+            go.transform.SetParent(parent, false);
+            go.SetActive(false);
+
+            var spriteGo = new GameObject("Sprite");
+            spriteGo.transform.SetParent(go.transform, false);
+            var sr = spriteGo.AddComponent<SpriteRenderer>();
+            sr.sortingOrder = 9;   // just behind Nix herself
+            sr.sprite = ArcherSprites.IdleFrames[0];
+
+            // Straight shot preview — two points, so no arc simulation needed.
+            var trajGo = new GameObject("Trajectory");
+            trajGo.transform.SetParent(go.transform, false);
+            var lr = trajGo.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.widthMultiplier = 0.1f;
+            lr.numCapVertices = 2;
+            lr.textureMode = LineTextureMode.Tile;
+            lr.alignment = LineAlignment.View;
+            lr.sortingOrder = 19;
+            lr.positionCount = 0;
+            trajGo.AddComponent<ProceduralLine>(); // keeps the material valid across save/reload
+
+            var eko = go.AddComponent<Eko>();
+            eko.sprite = sr;
+            eko.trajectory = lr;
+            eko.arrowPrefab = arrowTemplate;
+            return eko;
         }
 
         /// <summary>
