@@ -47,7 +47,7 @@ namespace NixAndEko.Player
 
         [Header("Bow")]
         [Tooltip("Seconds to fully draw the bow.")]
-        public float bowDrawTime = 0.5f;
+        public float bowDrawTime = 0.2f;
         [Tooltip("Arrow speed at zero draw.")]
         public float arrowMinSpeed = 10f;
         [Tooltip("Arrow speed at full draw.")]

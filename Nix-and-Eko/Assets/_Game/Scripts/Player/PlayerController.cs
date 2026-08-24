@@ -100,6 +100,18 @@ namespace NixAndEko.Player
             if (spriteRoot == null) spriteRoot = transform;
             if (input == null) input = GetComponent<PlayerInputReader>();
 
+            // Run from a private copy of the config so tweaking values on the player at runtime
+            // (in the inspector during Play) never writes back into the shared asset that holds
+            // the defaults. States, the bow and input all read through Config / player.Config,
+            // so they pick up this copy too.
+            if (config != null)
+            {
+                string baseName = config.name;
+                config = Instantiate(config);
+                config.name = baseName + " (runtime copy)";
+                if (input != null) input.config = config;
+            }
+
             Idle = new IdleState(this);
             MoveS = new MoveState(this);
             Jump = new JumpState(this);

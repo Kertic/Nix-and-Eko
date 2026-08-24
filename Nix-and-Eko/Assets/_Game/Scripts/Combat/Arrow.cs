@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace NixAndEko.Combat
@@ -12,7 +13,7 @@ namespace NixAndEko.Combat
     public class Arrow : MonoBehaviour
     {
         [Tooltip("Seconds before a stuck arrow disappears (0 = never).")]
-        public float stuckLifetime = 6f;
+        public float stuckLifetime = 1f;
         [Tooltip("Seconds before an in-flight arrow that never hits anything despawns.")]
         public float flightLifetime = 4f;
         [Tooltip("Gravity scale while flying.")]
@@ -25,18 +26,35 @@ namespace NixAndEko.Combat
         Collider2D _col;
         bool _stuck;
 
+        /// <summary>
+        /// Every live arrow, so a freshly fired one can be told to pass through the others.
+        /// Without this, two arrows sharing space — successive shots spawn on top of each other at
+        /// the muzzle, or two arcs crossing mid-air — collide and both freeze in place.
+        /// </summary>
+        static readonly List<Arrow> Active = new List<Arrow>();
+
         void Awake()
         {
             _rb = GetComponent<Rigidbody2D>();
             _col = GetComponent<Collider2D>();
             _rb.gravityScale = gravityScale;
+            _rb.freezeRotation = true;   // we orient the arrow to its velocity; keep physics from spinning it
             _rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         }
+
+        void OnDestroy() => Active.Remove(this);
 
         /// <summary>Launch the arrow. Called by the Bow.</summary>
         public void Launch(Vector2 velocity, float chargeAmount)
         {
             charge = chargeAmount;
+
+            // Never collide with another arrow — set before the next physics step so no impulse lands.
+            foreach (Arrow other in Active)
+                if (other != null && other._col != null)
+                    Physics2D.IgnoreCollision(_col, other._col, true);
+            Active.Add(this);
+
             _rb.linearVelocity = velocity;
             Orient();
             if (flightLifetime > 0f) Destroy(gameObject, flightLifetime + stuckLifetime);

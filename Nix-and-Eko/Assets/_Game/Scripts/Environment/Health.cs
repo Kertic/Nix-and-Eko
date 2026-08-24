@@ -36,6 +36,10 @@ namespace NixAndEko.Environment
 
         void Start()
         {
+            // Prefer the player's runtime copy (see PlayerController.Awake) over the shared asset,
+            // so editing health values on the player at runtime doesn't touch the defaults.
+            if (player != null && player.Config != null) config = player.Config;
+
             Current = config != null ? config.maxHealth : 5;
             HealthChanged?.Invoke(Current, Max);
         }

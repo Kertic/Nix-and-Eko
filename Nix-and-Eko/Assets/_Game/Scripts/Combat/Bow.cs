@@ -58,7 +58,7 @@ namespace NixAndEko.Combat
         public bool oneShotPerAirtime = true;
 
         [Header("Tuning (falls back to PlayerConfig when present)")]
-        public float drawTime = 0.5f;
+        public float drawTime = 0.2f;
         public float minSpeed = 10f;
         public float maxSpeed = 34f;
 
