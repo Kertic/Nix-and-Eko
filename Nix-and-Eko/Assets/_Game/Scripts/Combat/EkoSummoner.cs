@@ -22,6 +22,12 @@ namespace NixAndEko.Combat
         public Bow bow;
         public Eko eko;
 
+        [Header("Aim assist")]
+        [Tooltip("How close (perpendicular, world units) Nix must be to Eko's preview line at " +
+                 "release for the shot to home in on her. Roughly her own width feels forgiving " +
+                 "without auto-hitting from way off the line.")]
+        public float assistRadius = 1.25f;
+
         /// <summary>False once a phantom has been summoned, until Nix next touches the ground.</summary>
         public bool CanSummon => !_spent;
 
@@ -60,9 +66,30 @@ namespace NixAndEko.Combat
                 return;
             }
 
-            // Button released: the echo looses what they were holding, then fades.
-            eko.Loose(bow.ArrowSpeed(_charge), player.Col);
+            // Button released: the echo looses what they were holding, then fades. If Nix is
+            // sitting on the preview line, the shot homes in on her (aim assist).
+            Transform homeTarget = PlayerOnPreviewLine() ? player.transform : null;
+            eko.Loose(bow.ArrowSpeed(_charge), player.Col, homeTarget);
             eko.Dismiss();
+        }
+
+        /// <summary>
+        /// Is Nix close enough to Eko's straight preview line — ahead of the phantom and within
+        /// <see cref="assistRadius"/> of the line — to earn a homing shot? Measured against the
+        /// full aim ray (not the wall-clipped visual), so a wall between them doesn't deny the
+        /// assist; the homing arrow phases through it anyway.
+        /// </summary>
+        bool PlayerOnPreviewLine()
+        {
+            Vector2 origin = eko.transform.position;
+            Vector2 dir = eko.AimDirection;
+            Vector2 toPlayer = (Vector2)player.transform.position - origin;
+
+            float along = Vector2.Dot(toPlayer, dir);
+            if (along < 0f || along > eko.previewDistance) return false;   // behind Eko or too far
+
+            Vector2 perp = toPlayer - dir * along;
+            return perp.magnitude <= assistRadius;
         }
 
         void Summon()
@@ -70,6 +97,8 @@ namespace NixAndEko.Combat
             _spent = true;
             _charge = bow.Charge;
             eko.Summon(player.transform.position, bow.AimDirection, player.Facing, player.groundMask);
+            // Mute Nix's own aim now that the gesture belongs to Eko, until the stick goes neutral.
+            bow.SuppressUntilRelease();
         }
 
         void OnDisable()

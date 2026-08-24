@@ -27,12 +27,17 @@ namespace NixAndEko.Combat
         public bool flyStraight;
         [Tooltip("Fired by Eko — catching Nix with it reloads her air shot instead of doing nothing.")]
         public bool isEkoArrow;
+        [Tooltip("Degrees per second the homing arrow can turn toward its mark (aim assist).")]
+        public float homingTurnRate = 720f;
 
         Rigidbody2D _rb;
         Collider2D _col;
         bool _stuck;
         /// <summary>Collider the arrow passes through until it has physically cleared it — see <see cref="ArmAgainst"/>.</summary>
         Collider2D _armAgainst;
+        /// <summary>When set, the arrow curves toward this and phases through everything else — see <see cref="HomeTo"/>.</summary>
+        Transform _homingTarget;
+        float _homeSpeed;
 
         /// <summary>
         /// Every live arrow, so a freshly fired one can be told to pass through the others.
@@ -65,11 +70,23 @@ namespace NixAndEko.Combat
             Physics2D.IgnoreCollision(_col, col, true);
         }
 
+        /// <summary>
+        /// Aim assist: curve toward <paramref name="target"/> and phase through everything else,
+        /// so an Eko shot released while Nix is on the preview line always finds its mark. Turns
+        /// the arrow into a trigger (no physical blocking) and steers it manually.
+        /// </summary>
+        public void HomeTo(Transform target)
+        {
+            _homingTarget = target;
+            if (_col != null) _col.isTrigger = true;   // pass through walls; still reports overlaps
+        }
+
         /// <summary>Launch the arrow. Called by the Bow (and by Eko).</summary>
         public void Launch(Vector2 velocity, float chargeAmount)
         {
             charge = chargeAmount;
-            _rb.gravityScale = flyStraight ? 0f : gravityScale;
+            _rb.gravityScale = _homingTarget != null || flyStraight ? 0f : gravityScale;
+            _homeSpeed = velocity.magnitude;
 
             // Never collide with another arrow — set before the next physics step so no impulse lands.
             foreach (Arrow other in Active)
@@ -94,6 +111,23 @@ namespace NixAndEko.Combat
                 Physics2D.IgnoreCollision(_col, _armAgainst, false);
                 _armAgainst = null;
             }
+        }
+
+        void FixedUpdate()
+        {
+            if (_stuck || _homingTarget == null) return;
+
+            // Steer the velocity toward the mark at a fixed turn rate — fast enough to guarantee
+            // the hit, slow enough to read as a curving arrow rather than a snap.
+            Vector2 to = (Vector2)_homingTarget.position - _rb.position;
+            if (to.sqrMagnitude < 0.0001f) return;
+
+            float speed = Mathf.Max(_homeSpeed, 0.01f);
+            Vector2 current = _rb.linearVelocity.sqrMagnitude > 0.0001f
+                ? _rb.linearVelocity.normalized : to.normalized;
+            float maxRad = homingTurnRate * Mathf.Deg2Rad * Time.fixedDeltaTime;
+            Vector2 steered = Vector3.RotateTowards(current, to.normalized, maxRad, 0f);
+            _rb.linearVelocity = steered.normalized * speed;
         }
 
         void Orient()
@@ -128,6 +162,7 @@ namespace NixAndEko.Combat
         /// </summary>
         bool MovingInto(Vector2 point)
         {
+            if (_homingTarget != null) return true;      // homing shots always connect with their mark
             Vector2 v = _rb.linearVelocity;
             if (v.sqrMagnitude < 0.0001f) return true;   // not moving: no direction to gate on
             return Vector2.Dot(v, point - (Vector2)transform.position) > 0f;
@@ -136,6 +171,12 @@ namespace NixAndEko.Combat
         void Impact(Collider2D other, Vector2 point)
         {
             if (_stuck) return;
+
+            // Aim-assist arrows phase through everything that isn't their mark — walls, floors,
+            // switches all ignored, so the shot can't be stopped short of Nix.
+            if (_homingTarget != null &&
+                other.transform != _homingTarget && !other.transform.IsChildOf(_homingTarget))
+                return;
 
             // Give the struck object a chance to react (and to reject sticking).
             var hittable = other.GetComponentInParent<IArrowHittable>();

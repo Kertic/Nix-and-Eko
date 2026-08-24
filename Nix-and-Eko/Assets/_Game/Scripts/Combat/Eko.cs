@@ -80,10 +80,13 @@ namespace NixAndEko.Combat
 
         /// <summary>
         /// Loose the held shot along the frozen aim. <paramref name="armAgainst"/> is Nix's
-        /// collider: the arrow spawns where she was standing when Eko was summoned, so it passes
-        /// through her until it has cleared her, and only then can catch her on the way back.
+        /// collider: normally the arrow spawns where she was standing when Eko was summoned, so it
+        /// passes through her until it has cleared her, and only then can catch her on the way
+        /// back. When <paramref name="homeTarget"/> is set (aim assist — Nix was on the preview
+        /// line at release), the arrow instead curves to her and phases through everything else,
+        /// so it always lands.
         /// </summary>
-        public Arrow Loose(float speed, Collider2D armAgainst)
+        public Arrow Loose(float speed, Collider2D armAgainst, Transform homeTarget = null)
         {
             if (arrowPrefab == null)
             {
@@ -97,7 +100,8 @@ namespace NixAndEko.Combat
 
             arrow.flyStraight = true;
             arrow.isEkoArrow = true;
-            arrow.ArmAgainst(armAgainst);
+            if (homeTarget != null) arrow.HomeTo(homeTarget);
+            else arrow.ArmAgainst(armAgainst);
             arrow.Launch(AimDirection * speed, 1f);
             return arrow;
         }

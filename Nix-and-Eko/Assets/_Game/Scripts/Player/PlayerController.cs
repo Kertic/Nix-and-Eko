@@ -248,6 +248,10 @@ namespace NixAndEko.Player
         /// <summary>Suppress horizontal steering input for at least <paramref name="seconds"/>.</summary>
         public void LockInput(float seconds) => InputLockTimer = Mathf.Max(InputLockTimer, seconds);
 
+        /// <summary>Top the glide meter back up without touching the ground — what an Eko arrow
+        /// catching Nix does, alongside reloading her air shot.</summary>
+        public void RefillGlide() => GlideFuel = Config != null ? Config.glideDuration : GlideFuel;
+
         /// <summary>Apply manual gravity, clamped to max fall speed.</summary>
         public void ApplyGravity(float gravity)
         {

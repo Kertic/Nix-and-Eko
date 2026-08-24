@@ -96,6 +96,7 @@ namespace NixAndEko.Combat
         bool _aimFromStick;                // this draw is steered by the right stick, not the mouse
         bool _snapNow;                     // skip hysteresis for one frame (fresh stick flick)
         bool _shotSpent;                   // fired since last touching the ground
+        bool _suppressAim;                 // Nix's draw is muted after an Eko summon until aim input goes neutral
         float _arrowGravity = 2.2f;   // arrow's gravityScale, for arc prediction
 
         /// <summary>The world point aiming originates from — the player's center.</summary>
@@ -134,9 +135,16 @@ namespace NixAndEko.Combat
             UpdateDragAnchor();
 
             AimDirection = ResolveAim();
-            UpdateIndicator();
 
-            if (input.AttackHeld)
+            // Summoning Eko off the current gesture suppresses Nix's own draw until the aim input
+            // returns to neutral — so letting the stick spring back to fire Eko doesn't also loose
+            // one of Nix's arrows, and no stale reticle overlaps the setup.
+            if (_suppressAim && !input.AttackHeld) _suppressAim = false;
+            bool aiming = input.AttackHeld && !_suppressAim;
+
+            UpdateIndicator(aiming);
+
+            if (aiming)
             {
                 IsAiming = true;
                 // Face the aim whether or not there's a shot to fire, so Eko's formation reads.
@@ -156,7 +164,7 @@ namespace NixAndEko.Combat
 
             if (input.AttackReleased)
             {
-                if (IsDrawing && CanFire) Fire(AimDirection, Charge);
+                if (IsDrawing && CanFire && !_suppressAim) Fire(AimDirection, Charge);
                 Charge = 0f;
                 IsDrawing = false;
                 IsAiming = false;
@@ -282,12 +290,12 @@ namespace NixAndEko.Combat
             }
         }
 
-        void UpdateIndicator()
+        void UpdateIndicator(bool aiming)
         {
             if (aimIndicator != null)
             {
-                aimIndicator.gameObject.SetActive(IsAiming);
-                if (IsAiming)
+                aimIndicator.gameObject.SetActive(aiming);
+                if (aiming)
                 {
                     float dist = Mathf.Lerp(indicatorNearDistance, indicatorFarDistance, Charge);
                     aimIndicator.position = Origin + (Vector3)AimDirection * dist;
@@ -363,6 +371,19 @@ namespace NixAndEko.Combat
         /// arrows catches Nix in flight.
         /// </summary>
         public void RefreshAirShot() => _shotSpent = false;
+
+        /// <summary>
+        /// Mute Nix's own aim/draw until the aim input next goes fully neutral. Called when Eko is
+        /// summoned off the current gesture, so releasing the stick to loose Eko's shot doesn't
+        /// also fire one of Nix's arrows or leave a stale reticle over the setup.
+        /// </summary>
+        public void SuppressUntilRelease()
+        {
+            _suppressAim = true;
+            IsDrawing = false;
+            IsAiming = false;
+            Charge = 0f;
+        }
 
         void Fire(Vector2 aimDir, float charge)
         {

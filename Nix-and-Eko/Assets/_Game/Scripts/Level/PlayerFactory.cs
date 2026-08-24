@@ -73,9 +73,10 @@ namespace NixAndEko.Level
             summoner.bow = bow;
             summoner.eko = eko;
 
-            // Lets Eko's arrows catch Nix and reload her air shot.
+            // Lets Eko's arrows catch Nix and reload her air shot + glide meter.
             var ekoTarget = go.AddComponent<EkoArrowTarget>();
             ekoTarget.bow = bow;
+            ekoTarget.player = controller;
 
             go.SetActive(true);   // everything is wired; let the components wake
             return controller;
