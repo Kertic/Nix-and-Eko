@@ -116,8 +116,8 @@ namespace NixAndEko.Combat
         {
             if (input == null) return;
 
-            // Landing reloads the bow.
-            if (player != null && player.Grounded) _shotSpent = false;
+            // Landing (or still within coyote) reloads the bow.
+            if (player != null && player.GroundedForRecoil) _shotSpent = false;
 
             UpdateAimSource();
             UpdateDragAnchor();
@@ -348,8 +348,9 @@ namespace NixAndEko.Combat
             arrow.Launch(aimDir * speed, charge);
             ApplyRecoil(aimDir, charge);
 
-            // Airborne shots spend the bow until the archer next touches the ground.
-            if (player != null && !player.Grounded) _shotSpent = true;
+            // Airborne shots spend the bow until the archer next touches the ground (or fires
+            // within the coyote window, which still counts as grounded).
+            if (player != null && !player.GroundedForRecoil) _shotSpent = true;
         }
 
         /// <summary>
@@ -368,10 +369,11 @@ namespace NixAndEko.Combat
             if (player == null) return;
             if (aimDir.sqrMagnitude < 0.0001f) return;
 
-            // Standing on the ground, only a downward shot (S / SW / SE) triggers recoil —
-            // that's the "bow jump". Sideways/upward ground shots never touch velocity, so
-            // running is never interrupted by grounded recoil.
-            if (player.Grounded && (!recoilWhileGrounded || aimDir.y > -0.5f)) return;
+            // Standing on the ground — or still within the coyote window after leaving it —
+            // only a downward shot (S / SW / SE) triggers recoil, that's the "bow jump".
+            // Sideways/upward ground shots never touch velocity, so running is never
+            // interrupted by grounded recoil.
+            if (player.GroundedForRecoil && (!recoilWhileGrounded || aimDir.y > -0.5f)) return;
 
             float speed = Mathf.Lerp(recoilMin, recoilMax, charge);
             Vector2 kickDir = (-aimDir).normalized;

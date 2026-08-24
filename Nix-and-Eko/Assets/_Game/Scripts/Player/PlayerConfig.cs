@@ -30,6 +30,10 @@ namespace NixAndEko.Player
         public float gravityDown = 42f;
         [Tooltip("Maximum downward speed.")]
         public float maxFallSpeed = 16f;
+        [Tooltip("Seconds after leaving the ground a shot still counts as grounded (down-only " +
+                 "recoil, doesn't spend airtime ammo) — coyote time, but for the bow instead of " +
+                 "a jump.")]
+        public float coyoteTime = 0.1f;
         [Tooltip("Seconds a Jump press is remembered before landing — only used by crouch + " +
                  "jump to drop through one-way platforms, now that there's no button-jump.")]
         public float jumpBuffer = 0.12f;

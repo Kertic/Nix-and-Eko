@@ -54,6 +54,10 @@ namespace NixAndEko.Player
         /// <summary>Seconds remaining before horizontal steering input is honored again. Used by
         /// bursts (recoil, dashes) so held input can't immediately cancel the kick out.</summary>
         public float InputLockTimer;
+        /// <summary>Seconds after leaving the ground during which the bow still treats a shot as
+        /// grounded — the equivalent of jump coyote time, but for firing a "grounded" arrow
+        /// instead of jumping.</summary>
+        public float CoyoteTimer;
 
         // --- States ---
         public IdleState Idle { get; private set; }
@@ -163,10 +167,17 @@ namespace NixAndEko.Player
             else JumpBufferTimer -= dt;
 
             if (InputLockTimer > 0f) InputLockTimer -= dt;
+
+            if (Grounded) CoyoteTimer = Config.coyoteTime;
+            else CoyoteTimer -= dt;
         }
 
         // ------------------------------------------------------------------ Helpers used by states
         public bool BufferedJump => JumpBufferTimer > 0f;
+        /// <summary>True while actually standing on the ground, or still within the coyote
+        /// window after leaving it. Used by <see cref="NixAndEko.Combat.Bow"/> to decide whether
+        /// a shot counts as "grounded" (down-only recoil, no airtime ammo spent).</summary>
+        public bool GroundedForRecoil => Grounded || CoyoteTimer > 0f;
 
         public void ConsumeJumpBuffer()
         {
@@ -182,6 +193,26 @@ namespace NixAndEko.Player
             if (InputLockTimer > 0f) return;
 
             float v = Velocity.x;
+            v = Mathf.MoveTowards(v, targetSpeed, accel * Time.fixedDeltaTime);
+            Velocity = new Vector2(v, Velocity.y);
+        }
+
+        /// <summary>
+        /// Steer horizontal velocity toward <paramref name="targetSpeed"/>, but never slow it
+        /// down if it's already going that way at least as fast — only pushes speed up toward
+        /// the target, or turns it around if input opposes it. Used in the air so holding the
+        /// direction you're already flying (e.g. after a recoil burst or a running jump) can't
+        /// cap you back down to normal move speed; only opposing input can actually slow you.
+        /// No-ops while <see cref="InputLockTimer"/> is running, same as <see cref="MoveHorizontal"/>.
+        /// </summary>
+        public void AccelerateHorizontal(float targetSpeed, float accel)
+        {
+            if (InputLockTimer > 0f) return;
+
+            float v = Velocity.x;
+            if (Mathf.Sign(v) == Mathf.Sign(targetSpeed) && Mathf.Abs(v) >= Mathf.Abs(targetSpeed))
+                return;
+
             v = Mathf.MoveTowards(v, targetSpeed, accel * Time.fixedDeltaTime);
             Velocity = new Vector2(v, Velocity.y);
         }

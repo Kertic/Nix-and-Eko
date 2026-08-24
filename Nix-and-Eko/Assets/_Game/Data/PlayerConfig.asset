@@ -20,6 +20,7 @@ MonoBehaviour:
   gravityUp: 32
   gravityDown: 42
   maxFallSpeed: 16
+  coyoteTime: 0.1
   jumpBuffer: 0.12
   wallSlideSpeed: 4
   bowDrawTime: 0.2

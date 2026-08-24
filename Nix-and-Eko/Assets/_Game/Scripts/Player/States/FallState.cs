@@ -22,8 +22,13 @@ namespace NixAndEko.Player.States
 
         public override void FixedTick(float fdt)
         {
-            float target = Mathf.Abs(In.Move.x) > 0.2f ? Mathf.Sign(In.Move.x) * Cfg.moveSpeed : 0f;
-            P.MoveHorizontal(target, Cfg.airAccel);
+            // No natural air drag: horizontal speed only changes if there's input to steer it,
+            // and holding the direction you're already flying never slows you down — only
+            // opposing input can. Letting go (or holding forward) keeps whatever speed you were
+            // carrying, so a running jump stays a long jump instead of bleeding off on its own.
+            if (Mathf.Abs(In.Move.x) > 0.2f)
+                P.AccelerateHorizontal(Mathf.Sign(In.Move.x) * Cfg.moveSpeed, Cfg.airAccel);
+
             P.ApplyGravity(Cfg.gravityDown);
         }
     }
