@@ -9,13 +9,14 @@ namespace NixAndEko.Player
     /// InputSystem_Actions asset (Player map). No generated wrapper class required.
     ///
     /// Keyboard/mouse and gamepad are both live at once; nothing has to be switched between.
-    /// On a gamepad the right stick doubles as the bow's trigger — pushing it out starts the
-    /// draw, letting it spring back fires — so <see cref="AttackHeld"/> and friends report the
-    /// union of the Attack button, that stick gesture, and the aim-hold trigger.
+    /// Aiming and firing are decoupled: the right stick (gamepad) or the mouse cursor (KB&amp;M)
+    /// only <em>aims</em> — the shot is loosed by a discrete press of the Nix Bow button (R2 / LMB),
+    /// never by the stick springing back. There is no draw/charge any more; every shot is full.
     ///
-    /// Holding the aim-hold button (R1) keeps the draw alive after the stick springs back, so
-    /// the aim stays put and the shot only looses when it's released — the same way holding the
-    /// Attack button (Square) already keeps a draw held.
+    /// Aim mode is a simple last-used-device heuristic: pushing the stick selects stick aiming
+    /// (reticle shows only while it's deflected); moving the mouse selects mouse aiming (reticle
+    /// tracks the cursor). <see cref="Combat.Bow"/> reads <see cref="AimStickActive"/> /
+    /// <see cref="MouseAiming"/> and resolves the actual direction against the player's centre.
     /// </summary>
     [DefaultExecutionOrder(-100)]   // sample input before anything reads it this frame
     public class PlayerInputReader : MonoBehaviour
@@ -27,53 +28,41 @@ namespace NixAndEko.Player
         public PlayerConfig config;
 
         [Header("Aim stick (gamepad)")]
-        [Tooltip("How far the right stick must be pushed before the bow starts drawing.")]
+        [Tooltip("How far the right stick must be pushed before it counts as aiming the bow.")]
         [Range(0.1f, 1f)]
         public float aimStickEngage = 0.6f;
-        [Tooltip("The stick has to fall back below this before the shot goes off. Kept well under the engage threshold — a wide gap is a big deadzone against unintentional snapback fires from an imprecise release or stick drift.")]
+        [Tooltip("The stick must fall back below this before aiming disengages — a little hysteresis so the reticle doesn't flicker at the threshold.")]
         [Range(0.05f, 1f)]
-        public float aimStickRelease = 0.15f;
+        public float aimStickRelease = 0.35f;
 
-        InputAction _move, _look, _aim, _aimHold, _glide, _eko, _jump, _attack, _crouch, _interact;
+        InputAction _move, _aim, _glide, _eko, _nixBow, _melee, _jump, _crouch, _interact;
 
         public Vector2 Move { get; private set; }
-        /// <summary>Right-stick / look vector. Unused by the bow (which reads <see cref="AimStickDirection"/>); kept for future use.</summary>
-        public Vector2 Look { get; private set; }
         /// <summary>Raw right-stick vector, deadzone applied by the Input System.</summary>
         public Vector2 Aim { get; private set; }
 
         /// <summary>True while the right stick is pushed far enough to count as aiming the bow.</summary>
         public bool AimStickActive { get; private set; }
-        /// <summary>
-        /// The last direction the right stick was pushed, held on to after it springs back to
-        /// centre — so pushing straight down and letting go fires straight down, rather than
-        /// wherever the stick happened to pass through on its way home.
-        /// </summary>
+        /// <summary>Unit direction the right stick is currently pushed (held from the last live frame).</summary>
         public Vector2 AimStickDirection { get; private set; } = Vector2.right;
 
+        /// <summary>True when the mouse is the active aim device (KB&amp;M): the reticle tracks the cursor.</summary>
+        public bool MouseAiming { get; private set; }
+
         public bool JumpPressed { get; private set; }
-        public bool JumpHeld { get; private set; }
-        public bool JumpReleased { get; private set; }
 
-        public bool AttackPressed { get; private set; }
-        public bool AttackHeld { get; private set; }
-        public bool AttackReleased { get; private set; }
-
-        /// <summary>True while the aim-hold button (R1) is held, pinning the current draw.</summary>
-        public bool AimHoldHeld { get; private set; }
-        /// <summary>True while the glide trigger (L2) is held — airborne, this keeps momentum
-        /// instead of letting it bleed off on its own.</summary>
-        public bool GlideHeld { get; private set; }
-
-        /// <summary>The frame the Eko summon button (R2) went down — plants the phantom.</summary>
+        /// <summary>The frame the Nix Bow button (R2 / LMB) went down — fires the shot, or sends Eko to fetch when empty.</summary>
+        public bool NixBowPressed { get; private set; }
+        /// <summary>The frame the Eko button (L1 / Q) went down — plants / prepares / fires / returns the phantom.</summary>
         public bool EkoPressed { get; private set; }
-        /// <summary>True while the Eko summon button (R2) is held; releasing it looses Eko's shot.</summary>
-        public bool EkoHeld { get; private set; }
+        /// <summary>The frame the Nix Melee button (R1 / RMB) went down — melee combo, or a roll when unarmed.</summary>
+        public bool MeleePressed { get; private set; }
+
+        /// <summary>True while the glide trigger (L2) is held.</summary>
+        public bool GlideHeld { get; private set; }
 
         public bool CrouchHeld { get; private set; }
         public bool InteractPressed { get; private set; }
-
-        bool _attackHeldLast;
 
         void Awake()
         {
@@ -92,13 +81,12 @@ namespace NixAndEko.Player
 
             var map = actions.FindActionMap("Player", throwIfNotFound: true);
             _move = map.FindAction("Move");
-            _look = map.FindAction("Look");
             _aim = map.FindAction("Aim");
-            _aimHold = map.FindAction("AimHold");
             _glide = map.FindAction("Glide");
             _eko = map.FindAction("Eko");
+            _nixBow = map.FindAction("NixBow");
+            _melee = map.FindAction("Melee");
             _jump = map.FindAction("Jump");
-            _attack = map.FindAction("Attack");
             _crouch = map.FindAction("Crouch");
             _interact = map.FindAction("Interact");
         }
@@ -108,67 +96,48 @@ namespace NixAndEko.Player
         void OnDisable()
         {
             actions?.FindActionMap("Player")?.Disable();
-            // Don't leave a half-finished gesture latched across a disable.
             AimStickActive = false;
-            AimHoldHeld = false;
             GlideHeld = false;
-            EkoHeld = false;
-            EkoPressed = false;
-            _attackHeldLast = false;
+            NixBowPressed = EkoPressed = MeleePressed = false;
         }
 
         void Update()
         {
             Move = _move != null ? _move.ReadValue<Vector2>() : Vector2.zero;
-            Look = _look != null ? _look.ReadValue<Vector2>() : Vector2.zero;
 
             JumpPressed = _jump != null && _jump.WasPressedThisFrame();
-            JumpHeld = _jump != null && _jump.IsPressed();
-            JumpReleased = _jump != null && _jump.WasReleasedThisFrame();
 
-            AimHoldHeld = _aimHold != null && _aimHold.IsPressed();
             GlideHeld = _glide != null && _glide.IsPressed();
 
+            NixBowPressed = _nixBow != null && _nixBow.WasPressedThisFrame();
             EkoPressed = _eko != null && _eko.WasPressedThisFrame();
-            EkoHeld = _eko != null && _eko.IsPressed();
+            MeleePressed = _melee != null && _melee.WasPressedThisFrame();
 
-            UpdateAimStick();
-            UpdateAttack();
+            UpdateAim();
 
             CrouchHeld = _crouch != null && _crouch.IsPressed();
             InteractPressed = _interact != null && _interact.WasPressedThisFrame();
         }
 
         /// <summary>
-        /// Track the right stick as a hold-and-release gesture: it engages once pushed past
-        /// <see cref="aimStickEngage"/> and stays engaged until it falls under
-        /// <see cref="aimStickRelease"/>, and its direction is only sampled while it's clearly
-        /// deflected so the springback can't drag the aim with it.
+        /// Track the aim stick as a plain engage/disengage with hysteresis, and pick which device
+        /// owns aiming this frame. Pushing the stick claims stick aiming; moving the mouse (or a
+        /// Nix Bow press with the pointer as the active device) claims mouse aiming.
         /// </summary>
-        void UpdateAimStick()
+        void UpdateAim()
         {
             Aim = _aim != null ? _aim.ReadValue<Vector2>() : Vector2.zero;
 
             float mag = Aim.magnitude;
             float release = Mathf.Min(aimStickRelease, aimStickEngage);
             AimStickActive = mag >= (AimStickActive ? release : aimStickEngage);
-
             if (mag >= aimStickEngage) AimStickDirection = Aim / mag;
-        }
 
-        /// <summary>
-        /// Attack is the Attack button OR the aim-stick gesture OR the aim-hold trigger, whichever
-        /// is active. The aim-hold trigger keeps the draw alive on its own, so a shot lined up with
-        /// the stick stays drawn after the stick springs back and fires when the trigger releases.
-        /// </summary>
-        void UpdateAttack()
-        {
-            bool held = (_attack != null && _attack.IsPressed()) || AimStickActive || AimHoldHeld;
-
-            AttackPressed = held && !_attackHeldLast;
-            AttackReleased = !held && _attackHeldLast;
-            AttackHeld = held;
-            _attackHeldLast = held;
+            // Last-used-device heuristic: the stick wins while it's deflected; otherwise mouse
+            // motion selects (and keeps) mouse aiming so the cursor reticle stays live for KB&M.
+            if (AimStickActive) MouseAiming = false;
+            else if (Mouse.current != null &&
+                     Mouse.current.delta.ReadValue().sqrMagnitude > 0.01f) MouseAiming = true;
         }
 
         /// <summary>Consume a buffered jump press so it isn't re-used by another system this frame.</summary>

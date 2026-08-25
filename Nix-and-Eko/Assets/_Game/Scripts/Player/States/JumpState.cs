@@ -14,6 +14,7 @@ namespace NixAndEko.Player.States
 
         public override void Tick(float dt)
         {
+            if (TryMeleeOrRoll()) return;
             P.FaceMoveInput();
 
             // Apex reached (or head-bonk) -> fall.

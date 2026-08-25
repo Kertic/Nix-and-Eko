@@ -15,6 +15,8 @@ namespace NixAndEko.Level
         Gate,
         TargetSwitch,
         BreakableWall,
+        EnemyWalker,
+        EnemySlammer,
     }
 
     /// <summary>One placed block. Only the fields relevant to <see cref="type"/> are used.</summary>
@@ -68,6 +70,8 @@ namespace NixAndEko.Level
             BlockType.Gate => new Vector2(1f, 4f),
             BlockType.TargetSwitch => new Vector2(1f, 1f),
             BlockType.BreakableWall => new Vector2(1.2f, 3f),
+            BlockType.EnemyWalker => new Vector2(0.9f, 1f),
+            BlockType.EnemySlammer => new Vector2(1f, 0.9f),
             _ => new Vector2(4f, 1f),
         };
 

@@ -83,9 +83,25 @@ namespace NixAndEko.Player
         public WallSlideState WallSlide { get; private set; }
         public CrouchState Crouch { get; private set; }
         public HurtState Hurt { get; private set; }
+        public MeleeState Melee { get; private set; }
+        public RollState Roll { get; private set; }
+
+        /// <summary>The bow — source of truth for whether Nix currently holds her arrow.</summary>
+        Combat.Bow _bow;
+        /// <summary>Does Nix currently hold her arrow (armed for the melee combo instead of a roll)?</summary>
+        public bool HasArrow
+        {
+            get
+            {
+                if (_bow == null) _bow = GetComponentInChildren<Combat.Bow>();
+                return _bow != null && _bow.HasArrow;
+            }
+        }
+        /// <summary>Which combo swing (0-2) the melee state is currently showing — read by the animator.</summary>
+        public int MeleePose;
 
         /// <summary>Coarse animation state, derived from the current locomotion state.</summary>
-        public enum AnimState { Idle, Run, Jump, Fall, Glide, WallSlide, Crouch, Hurt }
+        public enum AnimState { Idle, Run, Jump, Fall, Glide, WallSlide, Crouch, Hurt, Melee, Roll }
 
         /// <summary>What the sprite should currently be showing.</summary>
         public AnimState Anim
@@ -94,6 +110,8 @@ namespace NixAndEko.Player
             {
                 var c = Machine.Current;
                 if (c == Hurt) return AnimState.Hurt;
+                if (c == Melee) return AnimState.Melee;
+                if (c == Roll) return AnimState.Roll;
                 if (c == WallSlide) return AnimState.WallSlide;
                 if (c == Crouch) return AnimState.Crouch;
                 if ((c == Jump || c == Fall) && IsGliding) return AnimState.Glide;
@@ -146,6 +164,10 @@ namespace NixAndEko.Player
             WallSlide = new WallSlideState(this);
             Crouch = new CrouchState(this);
             Hurt = new HurtState(this);
+            Melee = new MeleeState(this);
+            Roll = new RollState(this);
+
+            _bow = GetComponentInChildren<Combat.Bow>();
         }
 
         void Start() => _machine.Initialize(Idle);

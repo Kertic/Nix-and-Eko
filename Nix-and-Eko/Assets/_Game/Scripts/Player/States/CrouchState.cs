@@ -10,6 +10,7 @@ namespace NixAndEko.Player.States
 
         public override void Tick(float dt)
         {
+            if (TryMeleeOrRoll()) return;
             if (!P.Grounded) { P.Machine.ChangeState(P.Fall); return; }
 
             // Crouch + jump = drop through a one-way platform if standing on one.

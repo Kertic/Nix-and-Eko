@@ -29,6 +29,15 @@ namespace NixAndEko.Combat
         public bool isEkoArrow;
         [Tooltip("Eko's aim direction — the way Nix gets flung when this arrow catches her (set by Eko).")]
         public Vector2 ekoAim = Vector2.right;
+
+        [Header("Nix's arrow")]
+        [Tooltip("This is Nix's single physical arrow — it becomes a walk-over pickup where it lands instead of despawning.")]
+        public bool isNixArrow;
+        [Tooltip("Drawn blue — set when Nix is wielding one of Eko's arrows.")]
+        public bool blue;
+        [Tooltip("How close Nix must come to a landed arrow to reclaim it (world units).")]
+        public float pickupRadius = 0.7f;
+        public Color blueTint = new Color(0.4f, 0.72f, 1f);
         [Tooltip("Degrees per second the homing arrow can turn toward its mark (aim assist).")]
         public float homingTurnRate = 720f;
         [Tooltip("Max seconds a homing arrow chases before giving up and despawning, so a shot " +
@@ -48,6 +57,13 @@ namespace NixAndEko.Combat
         float _homeSpeed;
         float _homingAge;
 
+        /// <summary>Nix arrow pickup state: the bow to hand back to, the player to reclaim on, and flight age.</summary>
+        Bow _pickupBow;
+        Collider2D _playerCol;
+        bool _isPickup;      // stuck as a reclaimable arrow on the ground
+        bool _reclaimed;     // Nix has taken this arrow back (via walk-over); don't re-grant on destroy
+        float _flightAge;
+
         /// <summary>
         /// Every live arrow, so a freshly fired one can be told to pass through the others.
         /// Without this, two arrows sharing space — successive shots spawn on top of each other at
@@ -64,7 +80,17 @@ namespace NixAndEko.Combat
             _rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         }
 
-        void OnDestroy() => Active.Remove(this);
+        void OnDestroy()
+        {
+            Active.Remove(this);
+            // Safety net: if Nix's own (non-blue) arrow despawns mid-flight (flew off into the void)
+            // without ever landing or being reclaimed, hand it straight back so she can't be
+            // soft-locked out of ever having an arrow again. Blue arrows are Eko's and spent on use,
+            // and a landed/stuck arrow (_stuck) is either a live pickup or a fading blue one — neither
+            // should re-grant.
+            if (isNixArrow && !blue && !_stuck && !_reclaimed && _pickupBow != null)
+                _pickupBow.GiveArrow(false);
+        }
 
         /// <summary>
         /// Register Nix as this Eko arrow's catch target. The arrow never physically collides with
@@ -81,6 +107,30 @@ namespace NixAndEko.Combat
             _catchHittable = nixCol.GetComponentInParent<IArrowHittable>();
             _catchArmed = false;
             Physics2D.IgnoreCollision(_col, nixCol, true);   // never impulse Nix
+        }
+
+        /// <summary>
+        /// Mark this as Nix's single physical arrow: it becomes a walk-over pickup where it lands
+        /// (rather than despawning), never shoves Nix in flight, and carries the blue flag so a
+        /// reclaimed Eko-arrow stays blue. <paramref name="playerCol"/> is Nix's collider, used for
+        /// the walk-over reclaim test.
+        /// </summary>
+        public void SetNixArrow(Bow bow, Collider2D playerCol, bool isBlue)
+        {
+            isNixArrow = true;
+            blue = isBlue;
+            _pickupBow = bow;
+            _playerCol = playerCol;
+            if (playerCol != null && _col != null)
+                Physics2D.IgnoreCollision(_col, playerCol, true);   // never shove Nix while flying
+            ApplyTint();
+        }
+
+        void ApplyTint()
+        {
+            if (!blue) return;
+            var sr = GetComponentInChildren<SpriteRenderer>();
+            if (sr != null) sr.color = blueTint;
         }
 
         /// <summary>
@@ -113,8 +163,11 @@ namespace NixAndEko.Combat
             Active.Add(this);
 
             _rb.linearVelocity = velocity;
+            ApplyTint();
             Orient();
-            if (flightLifetime > 0f) Destroy(gameObject, flightLifetime + stuckLifetime);
+            // Nix's arrow persists as a pickup where it lands, so it isn't on the despawn clock —
+            // it's only despawned if it flies off and never hits anything (handled in FixedUpdate).
+            if (!isNixArrow && flightLifetime > 0f) Destroy(gameObject, flightLifetime + stuckLifetime);
         }
 
         void Update()
@@ -125,10 +178,31 @@ namespace NixAndEko.Combat
 
         void FixedUpdate()
         {
+            if (_isPickup) { TryReclaim(); return; }
             if (_stuck) return;
+
+            if (isNixArrow)
+            {
+                // A Nix arrow that never connects falls away eventually, rather than living forever.
+                _flightAge += Time.fixedDeltaTime;
+                if (flightLifetime > 0f && _flightAge >= flightLifetime) { Destroy(gameObject); return; }
+            }
 
             if (TryCatchNix()) return;                 // arrow consumed itself catching Nix
             if (_homingTarget != null) HomingSteer();
+        }
+
+        /// <summary>Reclaim a landed Nix arrow once she walks close enough to it.</summary>
+        void TryReclaim()
+        {
+            if (_pickupBow == null) return;
+            Vector2 target = _playerCol != null ? (Vector2)_playerCol.bounds.center
+                           : (Vector2)transform.position;
+            if (Vector2.Distance(target, transform.position) > pickupRadius) return;
+
+            _reclaimed = true;
+            _pickupBow.GiveArrow(blue);
+            Destroy(gameObject);
         }
 
         /// <summary>
@@ -216,7 +290,7 @@ namespace NixAndEko.Combat
 
         void Impact(Collider2D other, Vector2 point)
         {
-            if (_stuck) return;
+            if (_stuck || _isPickup) return;
 
             // Aim-assist arrows phase through everything that isn't their mark — walls, floors,
             // switches all ignored, so the shot can't be stopped short of Nix.
@@ -224,12 +298,28 @@ namespace NixAndEko.Combat
                 other.transform != _homingTarget && !other.transform.IsChildOf(_homingTarget))
                 return;
 
-            // Give the struck object a chance to react (and to reject sticking).
+            // One of Nix's own arrows striking the Eko phantom swaps their places — Eko's own
+            // arrows never do (isEkoArrow). The arrow drops as a pickup at the impact point, which
+            // (after the swap) is exactly where Nix lands, so she can grab it right back.
+            if (!isEkoArrow)
+            {
+                var eko = other.GetComponentInParent<Eko>();
+                if (eko != null && eko.Active)
+                {
+                    eko.OnNixArrowHit();
+                    Stick(transform);   // Nix arrow → becomes a pickup where it struck
+                    return;
+                }
+            }
+
+            // Give the struck object a chance to react (and to reject sticking). Nix's single arrow
+            // still triggers a "consume" target (switch, breakable, enemy) but is never destroyed by
+            // it — it drops right there as a pickup so she can always get it back.
             var hittable = other.GetComponentInParent<IArrowHittable>();
             if (hittable != null)
             {
                 bool shouldStick = hittable.OnArrowHit(this);
-                if (!shouldStick) { Destroy(gameObject); return; }
+                if (!shouldStick && !isNixArrow) { Destroy(gameObject); return; }
             }
 
             Stick(other.transform);
@@ -242,12 +332,21 @@ namespace NixAndEko.Combat
             _rb.bodyType = RigidbodyType2D.Kinematic;
             _rb.simulated = true;
 
-            // Ride moving platforms.
-            transform.SetParent(surface, worldPositionStays: true);
-
             // Stuck arrows are purely cosmetic — never standable, never blocking.
             _col.enabled = false;
 
+            if (isNixArrow)
+            {
+                // Nix's own (non-blue) arrow waits where it fell as a walk-over pickup, unparented so
+                // a struck target that later dies (an enemy) can't take the pickup with it.
+                if (!blue) { _isPickup = true; return; }
+                // A blue arrow is Eko's, spent on use — it just fades, never reclaimed.
+                if (stuckLifetime > 0f) Destroy(gameObject, stuckLifetime);
+                return;
+            }
+
+            // Other arrows ride moving platforms, then fade.
+            transform.SetParent(surface, worldPositionStays: true);
             if (stuckLifetime > 0f) Destroy(gameObject, stuckLifetime);
         }
     }

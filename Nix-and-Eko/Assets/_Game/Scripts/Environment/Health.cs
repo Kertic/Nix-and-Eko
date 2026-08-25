@@ -66,6 +66,12 @@ namespace NixAndEko.Environment
             if (player != null) player.ReceiveHit(sourcePosition);
         }
 
+        /// <summary>Grant a burst of invulnerability (e.g. the roll's i-frames).</summary>
+        public void GrantInvuln(float seconds)
+        {
+            if (seconds > _invulnTimer) _invulnTimer = seconds;
+        }
+
         public void Heal(int amount)
         {
             Current = Mathf.Min(Max, Current + amount);

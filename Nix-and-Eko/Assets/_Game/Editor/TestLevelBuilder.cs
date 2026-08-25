@@ -107,12 +107,12 @@ namespace NixAndEko.EditorTools
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene());
             Debug.Log("[Builder] Built '" + level.name + "' (" + level.blocks.Count + " blocks). Press Play.\n" +
-                      "Keyboard: A/D move, Space jump (hold = higher), C crouch (C+Space drops through white " +
-                      "platforms). Hold LMB to draw, drag from the circle to aim in 8 directions, release to fire.\n" +
-                      "Gamepad (PS5 labels): left stick or d-pad move, X jump (hold = higher), Circle crouch. " +
-                      "Push the right stick to draw and aim, let it spring back to fire that way. " +
-                      "Hold R2 to keep the aim held after the stick recenters, and release R2 to fire.\n" +
-                      "Either way: cling to walls to slide, and mid-air shots recoil you the opposite way.");
+                      "Keyboard: A/D move, Space jump, C crouch (C+Space drops through white platforms). " +
+                      "Mouse aims. LMB = Nix Bow (fire / fetch when empty), RMB = Nix Melee, Q = Eko.\n" +
+                      "Gamepad (PS5 labels): left stick or d-pad move, X jump, Circle crouch. Right stick aims. " +
+                      "R2 = Nix Bow, R1 = Nix Melee (3-hit combo with an arrow, roll without), L1 = Eko.\n" +
+                      "You have one arrow: fire it, then walk over it or press R2 to send Eko to fetch it. " +
+                      "Shoot a planted Eko to swap places. Cling to walls to slide; downward shots recoil you up.");
         }
 
         /// <summary>Root names used by earlier versions, cleaned up so rebuilds never stack up.</summary>
@@ -215,6 +215,8 @@ namespace NixAndEko.EditorTools
             Block(BlockType.OneWay, -38f, 3f, 6f, 0.4f);
             Block(BlockType.Ground, -48f, 7f, 10f, 1f);         // upper shelf
             Block(BlockType.Checkpoint, -56f, -4.5f, 1f, 2f);
+            Block(BlockType.EnemyWalker, -62f, -4.5f, 0.9f, 1f);   // paces the start plateau
+            Block(BlockType.EnemySlammer, -16f, -4.5f, 1f, 0.9f);  // pounds the step-down ledge
 
             // ---------------- Zone 2: wall-slide descent ----------------
             Block(BlockType.Ground, -8f, 4f, 2f, 26f);          // tall left wall

@@ -81,6 +81,32 @@ namespace NixAndEko.Player
         [Range(0.05f, 1f)]
         public float aimStickRelease = 0.15f;
 
+        [Header("Melee (R1 with an arrow)")]
+        [Tooltip("Reach of the melee hitbox ahead of Nix (world units).")]
+        public float meleeRange = 1.1f;
+        [Tooltip("Height of the melee hitbox (world units).")]
+        public float meleeHeight = 1.2f;
+        [Tooltip("Damage per melee hit.")]
+        public int meleeDamage = 1;
+        [Tooltip("Seconds each combo swing lasts.")]
+        public float meleeHitDuration = 0.22f;
+        [Tooltip("Fraction of a swing (0-1) when the hitbox goes live.")]
+        [Range(0f, 1f)] public float meleeActiveStart = 0.25f;
+        [Tooltip("Fraction of a swing (0-1) when the hitbox turns off.")]
+        [Range(0f, 1f)] public float meleeActiveEnd = 0.7f;
+        [Tooltip("Extra seconds after a swing's active frames during which a press chains to the next hit.")]
+        public float meleeChainWindow = 0.18f;
+        [Tooltip("Forward lunge speed applied at the start of each swing (the thrust lunges hardest).")]
+        public float meleeLunge = 6f;
+
+        [Header("Roll (R1 with no arrow, grounded)")]
+        [Tooltip("Dash speed of the roll.")]
+        public float rollSpeed = 16f;
+        [Tooltip("Seconds the roll lasts.")]
+        public float rollDuration = 0.32f;
+        [Tooltip("Seconds of invulnerability granted during the roll (0 = none).")]
+        public float rollInvuln = 0.25f;
+
         [Header("Health")]
         public int maxHealth = 5;
         [Tooltip("Invulnerability seconds after taking a hit.")]

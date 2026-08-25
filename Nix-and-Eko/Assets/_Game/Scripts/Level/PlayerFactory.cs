@@ -74,7 +74,7 @@ namespace NixAndEko.Level
 
             // Eko lives in world space (under the level root, not the player) so the phantom
             // stays frozen where it was planted while Nix flies off.
-            Eko eko = BuildEko(parent, arrowTemplate);
+            Eko eko = BuildEko(parent, arrowTemplate, controller);
 
             var summoner = go.AddComponent<EkoSummoner>();
             summoner.player = controller;
@@ -193,16 +193,24 @@ namespace NixAndEko.Level
         /// The Eko phantom: a translucent blue echo of Nix that gets planted in the world, plus
         /// its straight-line shot preview. Built once and kept inactive between summons.
         /// </summary>
-        static Eko BuildEko(Transform parent, Arrow arrowTemplate)
+        static Eko BuildEko(Transform parent, Arrow arrowTemplate, PlayerController player)
         {
             var go = new GameObject("Eko");
             go.transform.SetParent(parent, false);
             go.SetActive(false);
 
+            // Trigger so one of Nix's arrows can strike the phantom and swap their places. Sized to
+            // the silhouette; a trigger never blocks or shoves anything.
+            var col = go.AddComponent<BoxCollider2D>();
+            col.isTrigger = true;
+            col.size = new Vector2(0.8f, 0.9f);
+
             var spriteGo = new GameObject("Sprite");
             spriteGo.transform.SetParent(go.transform, false);
             var sr = spriteGo.AddComponent<SpriteRenderer>();
-            sr.sortingOrder = 9;   // just behind Nix herself
+            // In front of Nix (11 > her 10) so the translucent echo is always visible, even when
+            // it's planted right on top of her before she moves off.
+            sr.sortingOrder = 11;
             sr.sprite = ArcherSprites.IdleFrames[0];
 
             // Straight shot preview — two points, so no arc simulation needed.
@@ -222,6 +230,7 @@ namespace NixAndEko.Level
             eko.sprite = sr;
             eko.trajectory = lr;
             eko.arrowPrefab = arrowTemplate;
+            eko.player = player;
             eko.passThroughMarkers = BuildPassThroughMarkers(go.transform);
             return eko;
         }

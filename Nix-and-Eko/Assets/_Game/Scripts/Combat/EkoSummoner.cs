@@ -1,21 +1,27 @@
 using NixAndEko.Player;
+using NixAndEko.Util;
 using UnityEngine;
 
 namespace NixAndEko.Combat
 {
     /// <summary>
-    /// Drives the Eko phantom from Nix's side: press the summon button (R2) while aiming to plant
-    /// an echo of Nix where she stands. That same press doesn't loose the shot — R2 has to be
-    /// released and pressed again to fire, so simply holding the button down can't also fire it.
-    /// The phantom keeps charging the whole time they're standing there, release included, so a
-    /// longer wait before that second press still means a stronger shot. Eko (a faerie, they/them)
-    /// can be summoned even when Nix is out of arrows — the reticle just greys out — since Eko
-    /// fires their own arrow, not one of Nix's.
+    /// Drives the Eko phantom (a faerie, they/them) and Nix's arrow retrieval.
     ///
-    /// Eko is a once-per-airtime resource, exactly like the mid-air bow shot: summoning spends
-    /// the charge, and it only comes back by touching the ground. So a phantom planted in mid-air
-    /// is the only one you get until you land — you have to commit to it, let their arrow fly, and
-    /// get back to solid ground before another is available.
+    /// <para><b>Eko button (L1)</b> is a toggle. First press plants an echo of Nix where she stands;
+    /// if she was aiming a real (fireable) shot it copies that shot and holds it (aiming pose +
+    /// straight preview), otherwise the phantom just stands there. A second press looses the held
+    /// shot — one of Eko's own blue arrows, so it doesn't matter whether Nix still holds an arrow —
+    /// and then, if Nix is on the ground, the phantom returns; if she's airborne it lingers in a
+    /// standing pose until she lands (so the retrieval loop can't be double-dipped). A press while a
+    /// shot-less phantom stands simply returns it.</para>
+    ///
+    /// <para><b>Nix Bow button (R2) while empty</b> sends Eko to fetch the downed arrow: on the
+    /// ground, a blue orb zips out to the arrow and back, handing it to Nix. Airborne it does
+    /// nothing; and if a phantom is already out, Eko just flashes to show they're occupied — we
+    /// never yank a setup phantom to run an errand.</para>
+    ///
+    /// Eko is a once-per-airtime resource, exactly like the mid-air bow shot: summoning spends the
+    /// charge, and it only comes back by touching the ground.
     /// </summary>
     public class EkoSummoner : MonoBehaviour
     {
@@ -27,18 +33,21 @@ namespace NixAndEko.Combat
 
         [Header("Aim assist")]
         [Tooltip("How close (perpendicular, world units) Nix must be to Eko's preview line at " +
-                 "release for the shot to home in on her. Roughly her own width feels forgiving " +
-                 "without auto-hitting from way off the line.")]
+                 "release for the shot to home in on her.")]
         public float assistRadius = 1.25f;
-        [Tooltip("Nix must be at least this far ahead of Eko along the line for a homing shot — " +
-                 "point-blank the arrow has no room to travel, so a normal shot handles it.")]
+        [Tooltip("Nix must be at least this far ahead of Eko along the line for a homing shot.")]
         public float assistMinDistance = 1.5f;
+
+        [Header("Fetch")]
+        [Tooltip("Seconds for the fetch orb to reach the downed arrow (and again to zip back).")]
+        public float fetchHop = 0.18f;
 
         /// <summary>False once a phantom has been summoned, until Nix next touches the ground.</summary>
         public bool CanSummon => !_spent;
 
         bool _spent;
-        float _charge;
+        bool _lingering;   // phantom fired mid-air and is standing until Nix lands
+        bool _fetching;    // an orb fetch is in flight
 
         void Awake()
         {
@@ -51,41 +60,93 @@ namespace NixAndEko.Combat
         {
             if (input == null || bow == null || eko == null || player == null) return;
 
-            // Landing (or still within the coyote window) is the only thing that gives the
-            // phantom back — airtime never refills it.
-            if (player.GroundedForRecoil && !eko.Active) _spent = false;
+            // Landing gives the phantom back, and retires a phantom that's been standing since it
+            // fired mid-air (returns it home with the orb visual).
+            if (player.GroundedForRecoil)
+            {
+                _spent = false;
+                if (_lingering && eko.Active) { eko.DismissWithOrb(); _lingering = false; }
+            }
+
+            HandleEkoButton();
+            HandleFetchButton();
+
+            if (eko.Active && eko.Prepared) eko.UpdatePreview();
+        }
+
+        void HandleEkoButton()
+        {
+            if (!input.EkoPressed) return;
 
             if (!eko.Active)
             {
-                // A phantom is an echo of a shot being lined up, so the bow has to be aimed —
-                // but it needn't be a fireable shot, so this works even out of arrows.
-                if (input.EkoPressed && CanSummon && bow.IsAiming) Summon();
+                if (CanSummon) Summon();
                 return;
             }
 
-            // The phantom keeps charging for as long as they're standing there — not just while
-            // R2 happens to be physically held down — so a longer wait before firing still means
-            // a stronger shot, same draw curve as Nix's own bow.
-            _charge = Mathf.Clamp01(_charge + Time.deltaTime / Mathf.Max(0.01f, bow.drawTime));
-            eko.UpdatePreview();
+            // Phantom is out: a prepared shot fires (and returns/lingers); a shot-less one just returns.
+            if (eko.Prepared) FirePhantom();
+            else eko.DismissWithOrb();
+        }
 
-            // Firing needs a fresh press, not the one that summoned the phantom: EkoPressed only
-            // ever fires the frame after a release (Unity's WasPressedThisFrame), so this can
-            // never trigger off the same physical press as Summon() above — R2 has to go up and
-            // come back down again before the shot looses.
-            if (!input.EkoPressed) return;
+        void Summon()
+        {
+            _spent = true;
+            _lingering = false;
+            // A phantom copies a shot only when Nix is actually holding a fireable, aimed arrow.
+            bool prepared = bow.IsAiming && bow.HasArrow;
+            eko.Summon(player.transform.position, bow.AimDirection, player.Facing,
+                       player.groundMask, prepared);
+        }
 
-            // If Nix is sitting on the preview line, the shot homes in on her (aim assist).
+        void FirePhantom()
+        {
             Transform homeTarget = PlayerOnPreviewLine() ? player.transform : null;
-            eko.Loose(bow.ArrowSpeed(_charge), _charge, player.Col, homeTarget);
-            eko.Dismiss();
+            eko.Loose(bow.ArrowSpeed(), 1f, player.Col, homeTarget);
+
+            // Grounded: return right away. Airborne: linger as a standing phantom until Nix lands,
+            // so she can't also fetch her downed arrow while this shot is in play.
+            if (player.GroundedForRecoil) eko.DismissWithOrb();
+            else { eko.MakeStanding(); _lingering = true; }
+        }
+
+        void HandleFetchButton()
+        {
+            if (!input.NixBowPressed || bow.HasArrow || _fetching) return;
+
+            // A phantom out on a setup is occupied — flash instead of running the errand.
+            if (eko.Active) { eko.FlashBusy(); return; }
+
+            // Airborne, or nothing to fetch: no retrieval.
+            if (!player.GroundedForRecoil) return;
+            Arrow arrow = bow.LastFiredArrow;
+            if (arrow == null) return;
+
+            StartFetch(arrow);
+        }
+
+        /// <summary>Orb out to the downed arrow, then orb back to hand it over.</summary>
+        void StartFetch(Arrow arrow)
+        {
+            _fetching = true;
+            bool wasBlue = arrow.blue;
+            Vector3 arrowPos = arrow.transform.position;
+            Vector3 nixPos = player.transform.position;
+
+            EkoOrb.Fly(nixPos, arrowPos, fetchHop, onArrive: () =>
+            {
+                if (arrow != null) Destroy(arrow.gameObject);
+                EkoOrb.Fly(arrowPos, player.transform.position, fetchHop, onArrive: () =>
+                {
+                    bow.GiveArrow(wasBlue);
+                    _fetching = false;
+                });
+            });
         }
 
         /// <summary>
         /// Is Nix close enough to Eko's straight preview line — ahead of the phantom and within
-        /// <see cref="assistRadius"/> of the line — to earn a homing shot? Measured against the
-        /// full aim ray (not the wall-clipped visual), so a wall between them doesn't deny the
-        /// assist; the homing arrow phases through it anyway.
+        /// <see cref="assistRadius"/> of the line — to earn a homing shot?
         /// </summary>
         bool PlayerOnPreviewLine()
         {
@@ -94,25 +155,17 @@ namespace NixAndEko.Combat
             Vector2 toPlayer = (Vector2)player.transform.position - origin;
 
             float along = Vector2.Dot(toPlayer, dir);
-            // Behind Eko, point-blank, or past the preview's reach: no homing.
             if (along < assistMinDistance || along > eko.previewDistance) return false;
 
             Vector2 perp = toPlayer - dir * along;
             return perp.magnitude <= assistRadius;
         }
 
-        void Summon()
-        {
-            _spent = true;
-            _charge = bow.Charge;
-            eko.Summon(player.transform.position, bow.AimDirection, player.Facing, player.groundMask);
-            // Mute Nix's own aim now that the gesture belongs to Eko, until the stick goes neutral.
-            bow.SuppressUntilRelease();
-        }
-
         void OnDisable()
         {
             if (eko != null && eko.Active) eko.Dismiss();
+            _lingering = false;
+            _fetching = false;
         }
     }
 }

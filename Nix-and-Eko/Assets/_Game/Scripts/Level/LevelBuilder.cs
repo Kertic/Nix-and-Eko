@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using NixAndEko.Combat;
 using NixAndEko.Environment;
 using NixAndEko.Util;
 using UnityEngine;
@@ -50,6 +51,8 @@ namespace NixAndEko.Level
                         gatesByLink.TryGetValue(b.linkId, out var linked);
                         CreateSwitch(b, root, linked);
                         break;
+                    case BlockType.EnemyWalker: CreateEnemyWalker(b, root, groundLayer); break;
+                    case BlockType.EnemySlammer: CreateEnemySlammer(b, root); break;
                 }
             }
 
@@ -197,6 +200,62 @@ namespace NixAndEko.Level
             sw.toggle = true;
             sw.targetRenderer = sr;
             sw.gates = gates != null ? gates.ToArray() : new Gate[0];
+        }
+
+        // ---------------------------------------------------------------- enemies
+        /// <summary>
+        /// Shared enemy rig: a kinematic root with a trigger collider (never shoves the player) plus
+        /// <see cref="EnemyHealth"/>, a flipping sprite child with a <see cref="HitFlash"/>, and a
+        /// hidden-until-damaged <see cref="EnemyHealthBar"/>. Returns (root, sprite renderer).
+        /// </summary>
+        static (GameObject root, SpriteRenderer sprite) CreateEnemyBase(
+            LevelBlock b, Transform parent, string name, Sprite first, Vector2 colSize, int maxHp)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.position = b.position;
+
+            var rb = go.AddComponent<Rigidbody2D>();
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.freezeRotation = true;
+
+            var col = go.AddComponent<BoxCollider2D>();
+            col.size = colSize;
+            col.isTrigger = true;
+
+            var spriteGo = new GameObject("Sprite");
+            spriteGo.transform.SetParent(go.transform, false);
+            var sr = spriteGo.AddComponent<SpriteRenderer>();
+            sr.sortingOrder = 8;
+            sr.sprite = first;
+            spriteGo.AddComponent<HitFlash>().target = sr;
+
+            var health = go.AddComponent<EnemyHealth>();
+            health.maxHealth = maxHp;
+            health.sprite = sr;
+
+            var barGo = new GameObject("HealthBar");
+            barGo.transform.SetParent(go.transform, false);
+            health.bar = barGo.AddComponent<EnemyHealthBar>();
+
+            return (go, sr);
+        }
+
+        static void CreateEnemyWalker(LevelBlock b, Transform parent, int groundLayer)
+        {
+            var (go, sr) = CreateEnemyBase(b, parent, "EnemyWalker",
+                                           EnemySprites.WalkerFrames[0], new Vector2(0.8f, 0.95f), 3);
+            var walker = go.AddComponent<EnemyWalker>();
+            walker.sprite = sr;
+            walker.groundMask = 1 << groundLayer;
+        }
+
+        static void CreateEnemySlammer(LevelBlock b, Transform parent)
+        {
+            var (go, sr) = CreateEnemyBase(b, parent, "EnemySlammer",
+                                           EnemySprites.SlammerIdle, new Vector2(0.9f, 0.85f), 4);
+            var slammer = go.AddComponent<EnemySlammer>();
+            slammer.sprite = sr;
         }
 
         // ---------------------------------------------------------------- backdrop

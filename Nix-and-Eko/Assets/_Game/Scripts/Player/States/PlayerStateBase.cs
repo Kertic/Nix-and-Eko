@@ -19,6 +19,20 @@ namespace NixAndEko.Player.States
 
         // --- Transition helpers shared across states ---
 
+        /// <summary>
+        /// Nix Melee (R1 / RMB): with an arrow in hand it starts the melee combo; unarmed and
+        /// grounded it starts a roll (airborne + unarmed does nothing yet). No-ops during an input
+        /// lock (e.g. a recoil burst) so it can't cancel a launch. Returns true if it changed state.
+        /// </summary>
+        protected bool TryMeleeOrRoll()
+        {
+            if (!In.MeleePressed || P.InputLockTimer > 0f) return false;
+
+            if (P.HasArrow) { P.Machine.ChangeState(P.Melee); return true; }
+            if (P.Grounded) { P.Machine.ChangeState(P.Roll); return true; }
+            return false;
+        }
+
         /// <summary>Are we pushing into a wall we're touching, while airborne?</summary>
         protected bool WantsWallSlide()
         {

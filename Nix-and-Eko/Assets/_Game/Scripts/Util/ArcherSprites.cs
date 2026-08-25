@@ -243,7 +243,90 @@ namespace NixAndEko.Util
             "...........",
         };
 
-        static Sprite[] _idle, _walk, _jump, _fall, _glide, _slide, _crouch, _hurt;
+        // ---- Melee: 3-hit combo poses (horizontal swipe, forward thrust, overhead) ----
+        static readonly string[] Melee0 =   // swipe: arm sweeping across, low-to-high
+        {
+            "...hHHh.....",
+            "..hHHHHh....",
+            "..hHFFFh....",
+            "..hHFEFhWWW.",
+            "...hFFhWW...",
+            "..qbBBBbW...",
+            ".qBBBBBBb...",
+            "..bBBBBb....",
+            "...BBBB.....",
+            "...LL.LL....",
+            "...LL.LL....",
+            "...ll.ll....",
+            "............",
+        };
+
+        static readonly string[] Melee1 =   // thrust: arrow driven straight forward
+        {
+            "...hHHh.....",
+            "..hHHHHh....",
+            "..hHFFFh....",
+            "..hHFEFh....",
+            "...hFFh.....",
+            "..qbBBBbWWWW",
+            ".qBBBBBBbWWq",
+            "..bBBBBb....",
+            "...BBBB.....",
+            "...LL.LL....",
+            "..LL...LL...",
+            "..ll...ll...",
+            "............",
+        };
+
+        static readonly string[] Melee2 =   // overhead: big swing coming down from up high
+        {
+            ".......WW...",
+            "...hHHhWW...",
+            "..hHHHHhW...",
+            "..hHFFFh.W..",
+            "..hHFEFh....",
+            "...hFFh.....",
+            "..qbBBBb....",
+            ".qBBBBBBb...",
+            "..bBBBBb....",
+            "...BBBB.....",
+            "..LL...LL...",
+            "..ll...ll...",
+            "............",
+        };
+
+        // ---- Roll: tucked ball, two spin frames ----
+        static readonly string[] Roll0 =
+        {
+            "............",
+            "............",
+            "...hHHHh....",
+            "..hHFFBBb...",
+            ".hHFEBBBBb..",
+            ".hFBBBBBBL..",
+            ".bBBBBBBLL..",
+            ".lLBBBBLl...",
+            "..llLLll....",
+            "............",
+            "............",
+        };
+
+        static readonly string[] Roll1 =
+        {
+            "............",
+            "............",
+            "...bBBBb....",
+            "..lLBBHHh...",
+            ".lLBBHFFHh..",
+            ".LBBBBFEFb..",
+            ".LLBBBBBBb..",
+            "..lLBBBBl...",
+            "...llLLl....",
+            "............",
+            "............",
+        };
+
+        static Sprite[] _idle, _walk, _jump, _fall, _glide, _slide, _crouch, _hurt, _melee, _roll;
 
         static Sprite Frame(string[] rows) => PixelArt.FromRows(rows, Pal);
 
@@ -263,5 +346,8 @@ namespace NixAndEko.Util
         public static Sprite[] WallSlideFrames => _slide ??= Clip(WallSlide);
         public static Sprite[] CrouchFrames => _crouch ??= Clip(Crouch);
         public static Sprite[] HurtFrames => _hurt ??= Clip(Hurt);
+        /// <summary>Three combo poses: [0] swipe, [1] thrust, [2] overhead.</summary>
+        public static Sprite[] MeleeFrames => _melee ??= Clip(Melee0, Melee1, Melee2);
+        public static Sprite[] RollFrames => _roll ??= Clip(Roll0, Roll1);
     }
 }

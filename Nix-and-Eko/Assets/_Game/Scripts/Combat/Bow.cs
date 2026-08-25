@@ -7,12 +7,14 @@ namespace NixAndEko.Combat
 {
     /// <summary>
     /// Drives aiming and shooting in parallel with locomotion, so the player can fire while
-    /// running, jumping or wall-sliding. Hold Attack to draw (charge), release to fire.
-    /// On mouse, aim is a drag: press to pin an anchor at the cursor, drag away from it to
-    /// choose one of 8 directions, release to fire. On a gamepad the right stick does both jobs
-    /// at once: pushing it out starts the draw and points the shot, letting it spring back to
-    /// centre fires along the direction it was last pushed.
-    /// A reticle and trajectory arc indicate draw + aim.
+    /// running, jumping or wall-sliding. Aiming and firing are separate: the right stick (gamepad)
+    /// or the mouse cursor (KB&amp;M) points the shot, and a press of the Nix Bow button (R2 / LMB)
+    /// looses it. There is no draw/charge — every shot fires at full speed and full recoil.
+    ///
+    /// Nix carries a single physical arrow. Firing spends it (<see cref="HasArrow"/> goes false) and
+    /// leaves the arrow in the world; she gets it back by walking over it, by sending Eko to fetch
+    /// it (see <see cref="EkoSummoner"/>), or when one of Eko's phantom arrows catches her. While
+    /// empty the reticle still tracks and greys out so Eko can be lined up.
     /// </summary>
     public class Bow : MonoBehaviour
     {
@@ -22,13 +24,13 @@ namespace NixAndEko.Combat
         public Arrow arrowPrefab;
         [Tooltip("Where arrows spawn from (rotates to aim). Defaults to this transform.")]
         public Transform muzzle;
-        [Tooltip("Reticle shown while drawing; points along the (snapped) aim direction.")]
+        [Tooltip("Reticle shown while aiming; points along the (snapped) aim direction.")]
         public Transform aimIndicator;
-        [Tooltip("Sprite on the aim indicator; tinted by charge. Optional.")]
+        [Tooltip("Sprite on the aim indicator; tinted by ammo state. Optional.")]
         public SpriteRenderer aimIndicatorRenderer;
-        [Tooltip("LineRenderer that previews the arrow's arc while drawing. Optional.")]
+        [Tooltip("LineRenderer that previews the arrow's arc while aiming. Optional.")]
         public LineRenderer trajectory;
-        [Tooltip("Small marker drawn where the drag started. Optional.")]
+        [Tooltip("Legacy mouse drag anchor marker — unused now that the mouse aims by cursor position. Kept hidden.")]
         public Transform dragAnchorIndicator;
         [Tooltip("Small dot markers dropped wherever the trajectory preview crosses clean through a one-way platform instead of stopping there.")]
         public Transform[] passThroughMarkers;
@@ -45,62 +47,49 @@ namespace NixAndEko.Combat
         [Tooltip("Extra degrees past a sector boundary the aim must travel before switching direction. Prevents flicker at the 45° edges. Overridden by PlayerConfig when present.")]
         [Range(0f, 22f)]
         public float aimHysteresis = 12f;
-        [Tooltip("How far the cursor must move from the anchor (screen pixels) before a direction registers.")]
-        public float dragDeadzonePixels = 14f;
 
         [Header("Recoil")]
-        [Tooltip("Velocity the player is set to (opposite the shot) at zero draw — a dash-style burst, not an add-on. Overridden by PlayerConfig when present.")]
-        public float recoilMin = 4f;
-        [Tooltip("Velocity the player is set to (opposite the shot) at full draw — a dash-style burst, not an add-on. Overridden by PlayerConfig when present.")]
+        [Tooltip("Velocity the player is set to (opposite the shot) on firing — a dash-style burst, not an add-on. Overridden by PlayerConfig when present.")]
         public float recoilMax = 14f;
+        [Tooltip("Lower recoil bound, kept for the Eko-catch launch which still lerps by the arrow's stored charge. Overridden by PlayerConfig when present.")]
+        public float recoilMin = 4f;
         [Tooltip("Apply recoil while grounded, for downward shots only (S / SW / SE) — that's the \"bow jump\". Sideways/upward ground shots never touch velocity, so running is never interrupted. Overridden by PlayerConfig when present.")]
         public bool recoilWhileGrounded = true;
         [Tooltip("Seconds of steering input lockout after a recoil burst, so held input can't immediately cancel the kick out. Overridden by PlayerConfig when present.")]
         public float recoilInputLock = 0.08f;
 
-        [Header("Ammo")]
-        [Tooltip("Only one shot per airtime: after firing mid-air the bow is spent until the archer lands.")]
-        public bool oneShotPerAirtime = true;
-
         [Header("Tuning (falls back to PlayerConfig when present)")]
-        public float drawTime = 0.2f;
-        [Tooltip("Flat arrow speed for anything less than a full draw — binary, not lerped with charge.")]
-        public float minSpeed = 10f;
-        [Tooltip("Arrow speed on a full draw only.")]
-        public float maxSpeed = 34f;
+        [Tooltip("Flat arrow speed — every shot fires at this speed now that charge is gone.")]
+        public float arrowSpeed = 34f;
 
         [Header("Indicator feel")]
-        public float indicatorNearDistance = 0.7f;
-        public float indicatorFarDistance = 1.6f;
-        public Color chargeStartColor = new Color(1f, 1f, 1f, 0.6f);
-        public Color chargeFullColor = new Color(1f, 0.35f, 0.35f, 1f);
-        [Tooltip("Reticle tint when the air shot is spent — aim still shows (greyed) so Eko can be lined up.")]
+        public float indicatorDistance = 1.4f;
+        [Tooltip("Reticle tint while holding an arrow (ready to fire).")]
+        public Color readyColor = new Color(1f, 0.9f, 0.5f, 1f);
+        [Tooltip("Reticle tint when empty — aim still shows (greyed) so Eko can be lined up.")]
         public Color noAmmoColor = new Color(0.55f, 0.6f, 0.7f, 0.5f);
+        [Tooltip("Trajectory / reticle tint applied when Nix is wielding one of Eko's (blue) arrows.")]
+        public Color blueColor = new Color(0.35f, 0.75f, 1f, 1f);
 
-        public float Charge { get; private set; }   // 0..1
-        /// <summary>True while actually charging a shot that can be fired (held + has ammo).</summary>
-        public bool IsDrawing { get; private set; }
         /// <summary>
-        /// True whenever the bow is being aimed — held down — regardless of whether there's a
-        /// shot to fire. Out of ammo the reticle still tracks and greys out (so Eko can be lined
-        /// up), but <see cref="IsDrawing"/> stays false and nothing charges.
+        /// True whenever the bow is being aimed (stick deflected, or mouse aiming) — regardless of
+        /// whether Nix currently holds an arrow. Out of arrows the reticle still tracks and greys.
         /// </summary>
         public bool IsAiming { get; private set; }
         /// <summary>The current snapped aim direction (unit vector).</summary>
         public Vector2 AimDirection { get; private set; } = Vector2.right;
 
-        /// <summary>False while the bow is spent mid-air, so UI can grey the reticle out.</summary>
-        public bool CanFire => !oneShotPerAirtime || !_shotSpent;
+        /// <summary>Does Nix currently hold her arrow (ready to fire)?</summary>
+        public bool HasArrow { get; private set; } = true;
+        /// <summary>Is the held arrow one of Eko's (drawn blue)?</summary>
+        public bool ArrowIsBlue { get; private set; }
+        /// <summary>The last arrow Nix fired that's now lying in the world to be reclaimed (null once picked up / gone).</summary>
+        public Arrow LastFiredArrow { get; private set; }
 
         Camera _cam;
-        Vector2 _dragAnchorScreen;         // where Attack was pressed, in screen pixels
-        bool _hasAnchor;                   // is a drag gesture currently active
-        bool _hasAim;                      // has the drag cleared the deadzone yet
-        bool _aimFromStick;                // this draw is steered by the right stick, not the mouse
         bool _snapNow;                     // skip hysteresis for one frame (fresh stick flick)
-        bool _shotSpent;                   // fired since last touching the ground
-        bool _suppressAim;                 // Nix's draw is muted after an Eko summon until aim input goes neutral
-        float _arrowGravity = 2.2f;   // arrow's gravityScale, for arc prediction
+        bool _aimFromStickLast;
+        float _arrowGravity = 2.2f;        // arrow's gravityScale, for arc prediction
 
         /// <summary>The world point aiming originates from — the player's center.</summary>
         Vector3 Origin => player != null ? player.transform.position : muzzle.position;
@@ -113,12 +102,11 @@ namespace NixAndEko.Combat
             if (aimIndicator != null && aimIndicatorRenderer == null)
                 aimIndicatorRenderer = aimIndicator.GetComponentInChildren<SpriteRenderer>();
             if (arrowPrefab != null) _arrowGravity = arrowPrefab.gravityScale;
+            if (dragAnchorIndicator != null) dragAnchorIndicator.gameObject.SetActive(false);
 
             if (player != null && player.Config != null)
             {
-                drawTime = player.Config.bowDrawTime;
-                minSpeed = player.Config.arrowMinSpeed;
-                maxSpeed = player.Config.arrowMaxSpeed;
+                arrowSpeed = player.Config.arrowMaxSpeed;
                 recoilMin = player.Config.recoilMin;
                 recoilMax = player.Config.recoilMax;
                 recoilWhileGrounded = player.Config.recoilWhileGrounded;
@@ -131,60 +119,27 @@ namespace NixAndEko.Combat
         {
             if (input == null) return;
 
-            // Landing (or still within coyote) reloads the bow.
-            if (player != null && player.GroundedForRecoil) _shotSpent = false;
-
-            UpdateAimSource();
-            UpdateDragAnchor();
-
+            IsAiming = input.AimStickActive || input.MouseAiming;
             AimDirection = ResolveAim();
 
-            // Summoning Eko off the current gesture suppresses Nix's own draw until the aim input
-            // returns to neutral — so letting the stick spring back to fire Eko doesn't also loose
-            // one of Nix's arrows, and no stale reticle overlaps the setup.
-            if (_suppressAim && !input.AttackHeld) _suppressAim = false;
-            bool aiming = input.AttackHeld && !_suppressAim;
+            if (IsAiming && player != null && Mathf.Abs(AimDirection.x) > 0.1f)
+                player.SetFacing(AimDirection.x > 0 ? 1 : -1);
 
-            UpdateIndicator(aiming);
+            UpdateIndicator(IsAiming);
 
-            if (aiming)
-            {
-                IsAiming = true;
-                // Face the aim whether or not there's a shot to fire, so Eko's formation reads.
-                if (player != null && Mathf.Abs(AimDirection.x) > 0.1f)
-                    player.SetFacing(AimDirection.x > 0 ? 1 : -1);
-
-                if (CanFire)
-                {
-                    IsDrawing = true;
-                    Charge = Mathf.Clamp01(Charge + Time.deltaTime / Mathf.Max(0.01f, drawTime));
-                }
-            }
-            else
-            {
-                IsAiming = false;
-            }
-
-            if (input.AttackReleased)
-            {
-                if (IsDrawing && CanFire && !_suppressAim) Fire(AimDirection, Charge);
-                Charge = 0f;
-                IsDrawing = false;
-                IsAiming = false;
-                _aimFromStick = false;   // the next gesture picks its own source
-            }
+            if (input.NixBowPressed && HasArrow)
+                Fire(AimDirection);
         }
 
+        // -------------------------------------------------------------------- Aim resolution
         /// <summary>Currently locked 8-way sector (0 = E, going CCW in 45° steps).</summary>
         int _aimSector;
 
         Vector2 ResolveAim()
         {
             Vector2 raw = GetRawAim();
-            if (!eightDirectional) return raw.normalized;
+            if (!eightDirectional) return raw.sqrMagnitude > 0.0001f ? raw.normalized : AimDirection;
 
-            // A fresh flick of the stick should land exactly where it is pushed, so the very
-            // first frame of that gesture ignores the anti-flicker hysteresis.
             if (_snapNow && raw.sqrMagnitude > 0.0001f)
             {
                 _snapNow = false;
@@ -197,23 +152,36 @@ namespace NixAndEko.Combat
         }
 
         /// <summary>
-        /// Work out whether this draw is a stick gesture or a mouse drag. The stick claims the
-        /// draw the moment it leaves centre and keeps it until the shot goes off, so the release
-        /// frame still fires along the direction the stick was pushed.
+        /// Aim comes from the right stick when it's deflected, otherwise from the mouse cursor's
+        /// direction off the player centre. A fresh stick flick snaps exactly where it points
+        /// (skipping hysteresis for that one frame).
         /// </summary>
-        void UpdateAimSource()
+        Vector2 GetRawAim()
         {
-            if (!input.AimStickActive) return;
+            if (input.AimStickActive)
+            {
+                if (!_aimFromStickLast) _snapNow = true;
+                _aimFromStickLast = true;
+                return input.AimStickDirection;
+            }
+            _aimFromStickLast = false;
 
-            if (!_aimFromStick) _snapNow = true;   // fresh flick: point exactly where it's pushed
-            _aimFromStick = true;
+            if (input.MouseAiming && Mouse.current != null)
+            {
+                if (_cam == null) _cam = Camera.main;
+                if (_cam != null)
+                {
+                    Vector3 mp = Mouse.current.position.ReadValue();
+                    mp.z = -_cam.transform.position.z;
+                    Vector3 world = _cam.ScreenToWorldPoint(mp);
+                    Vector2 d = (Vector2)(world - Origin);
+                    if (d.sqrMagnitude > 0.0001f) return d;
+                }
+            }
+
+            return player != null ? new Vector2(player.Facing, 0f) : Vector2.right;
         }
 
-        /// <summary>
-        /// Snap to 8 directions with hysteresis: the aim keeps its current sector until the raw
-        /// angle travels past the sector's edge by <see cref="aimHysteresis"/> degrees, so the
-        /// reticle doesn't flicker when aiming near a 45° boundary.
-        /// </summary>
         Vector2 SnapSticky(Vector2 dir)
         {
             if (dir.sqrMagnitude < 0.0001f) return SectorToDir(_aimSector);
@@ -221,7 +189,6 @@ namespace NixAndEko.Combat
             float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
             float fromCurrent = Mathf.DeltaAngle(_aimSector * 45f, angle);
 
-            // Only leave the current sector once we're clearly past its half-width (22.5°) plus margin.
             if (Mathf.Abs(fromCurrent) > 22.5f + aimHysteresis)
             {
                 int nearest = Mathf.RoundToInt(angle / 45f);
@@ -237,62 +204,7 @@ namespace NixAndEko.Combat
             return new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)).normalized;
         }
 
-        /// <summary>
-        /// Aim comes from the right stick when one is in play, otherwise from a mouse drag.
-        /// For the mouse: pressing Attack pins an anchor at the cursor, and the
-        /// direction dragged away from that anchor is the direction the arrow flies (snapped to
-        /// eight). The gesture is measured in screen space so a scrolling camera can't skew it.
-        /// Before the drag clears the deadzone the aim holds its last value, then the facing.
-        /// </summary>
-        Vector2 GetRawAim()
-        {
-            // Right stick: the direction it's pushed is the direction the arrow flies. The
-            // input reader latches that direction, so the springback never steals the aim.
-            if (_aimFromStick) return input.AimStickDirection;
-
-            if (Mouse.current != null && _hasAnchor)
-            {
-                Vector2 drag = Mouse.current.position.ReadValue() - _dragAnchorScreen;
-                if (drag.sqrMagnitude > dragDeadzonePixels * dragDeadzonePixels)
-                {
-                    _hasAim = true;
-                    return drag;   // screen and world axes align for an unrotated ortho camera
-                }
-            }
-
-            // Drag hasn't left the anchor yet — keep pointing where we already were.
-            if (_hasAim) return SectorToDir(_aimSector);
-
-            return player != null ? new Vector2(player.Facing, 0f) : Vector2.right;
-        }
-
-        /// <summary>Pin/release the drag anchor and keep its on-screen marker in place.</summary>
-        void UpdateDragAnchor()
-        {
-            if (input.AttackPressed && !_aimFromStick && Mouse.current != null)
-            {
-                _dragAnchorScreen = Mouse.current.position.ReadValue();
-                _hasAnchor = true;
-                _hasAim = false;   // a fresh gesture starts from the archer's facing
-            }
-
-            if (!input.AttackHeld || _aimFromStick) _hasAnchor = false;
-
-            if (dragAnchorIndicator == null) return;
-            dragAnchorIndicator.gameObject.SetActive(_hasAnchor);
-            if (!_hasAnchor) return;
-
-            // Re-project every frame so the marker stays under the spot that was clicked.
-            if (_cam == null) _cam = Camera.main;
-            if (_cam != null)
-            {
-                Vector3 world = _cam.ScreenToWorldPoint(new Vector3(
-                    _dragAnchorScreen.x, _dragAnchorScreen.y, -_cam.transform.position.z));
-                world.z = 0f;
-                dragAnchorIndicator.position = world;
-            }
-        }
-
+        // -------------------------------------------------------------------- Indicators
         void UpdateIndicator(bool aiming)
         {
             if (aimIndicator != null)
@@ -300,15 +212,11 @@ namespace NixAndEko.Combat
                 aimIndicator.gameObject.SetActive(aiming);
                 if (aiming)
                 {
-                    float dist = Mathf.Lerp(indicatorNearDistance, indicatorFarDistance, Charge);
-                    aimIndicator.position = Origin + (Vector3)AimDirection * dist;
+                    aimIndicator.position = Origin + (Vector3)AimDirection * indicatorDistance;
                     aimIndicator.right = AimDirection;
                     if (aimIndicatorRenderer != null)
-                        // Greyed out when the air shot is spent — the reticle still shows so Eko
-                        // can be aimed, but it reads as "no arrow to fire".
-                        aimIndicatorRenderer.color = CanFire
-                            ? Color.Lerp(chargeStartColor, chargeFullColor, Charge)
-                            : noAmmoColor;
+                        aimIndicatorRenderer.color = !HasArrow ? noAmmoColor
+                                                   : ArrowIsBlue ? blueColor : readyColor;
                 }
             }
 
@@ -317,24 +225,23 @@ namespace NixAndEko.Combat
 
         /// <summary>
         /// Preview the arrow's parabolic arc, clipped at the first surface it would actually stop
-        /// at. A one-way platform only clips the line if the arc would hit its blocking face
-        /// (<see cref="OneWayPlatform.Blocks"/>) — a shot arcing up through one from below instead
-        /// gets a small marker dropped where it crosses, matching what the real arrow will do.
+        /// at. Shown only while aiming with an arrow in hand. A one-way platform only clips the line
+        /// if the arc would hit its blocking face (<see cref="OneWayPlatform.Blocks"/>); a shot
+        /// arcing up through one from below gets a small marker dropped where it crosses instead.
         /// </summary>
         void UpdateTrajectory()
         {
             if (trajectory == null) return;
 
-            if (!IsDrawing)
+            if (!IsAiming || !HasArrow)
             {
                 trajectory.positionCount = 0;
                 HidePassThroughMarkers();
                 return;
             }
 
-            float speed = ArrowSpeed(Charge);
             Vector2 p0 = Origin;
-            Vector2 v0 = AimDirection * speed;
+            Vector2 v0 = AimDirection * arrowSpeed;
             Vector2 accel = new Vector2(0f, Physics2D.gravity.y * _arrowGravity);
             LayerMask mask = player != null ? player.groundMask : default;
 
@@ -361,9 +268,6 @@ namespace NixAndEko.Combat
                             break;
                         }
 
-                        // Passes clean through this one-way platform — flag the crossing instead
-                        // of stopping the line there. Guarded against re-flagging the same
-                        // collider on every remaining sample while still inside its thickness.
                         if (hit.collider != lastPassThrough &&
                             passThroughMarkers != null && markerCount < passThroughMarkers.Length)
                         {
@@ -384,7 +288,7 @@ namespace NixAndEko.Combat
             trajectory.positionCount = count;
             HidePassThroughMarkers(markerCount);
 
-            Color c = Color.Lerp(chargeStartColor, chargeFullColor, Charge);
+            Color c = ArrowIsBlue ? blueColor : readyColor;
             trajectory.startColor = c;
             trajectory.endColor = new Color(c.r, c.g, c.b, 0f); // fade out toward the end
         }
@@ -405,33 +309,25 @@ namespace NixAndEko.Combat
                 if (passThroughMarkers[i] != null) passThroughMarkers[i].gameObject.SetActive(false);
         }
 
-        /// <summary>
-        /// Arrow speed is binary, not lerped: a full draw fires at <see cref="maxSpeed"/>,
-        /// anything less — including no charge at all — fires at the flat <see cref="minSpeed"/>.
-        /// There's no in-between force.
-        /// </summary>
-        public float ArrowSpeed(float charge) => charge >= 1f ? maxSpeed : minSpeed;
+        // -------------------------------------------------------------------- Arrow inventory
+        public float ArrowSpeed() => arrowSpeed;
 
-        /// <summary>
-        /// Reload the mid-air shot without touching the ground — what happens when one of Eko's
-        /// arrows catches Nix in flight.
-        /// </summary>
-        public void RefreshAirShot() => _shotSpent = false;
-
-        /// <summary>
-        /// Mute Nix's own aim/draw until the aim input next goes fully neutral. Called when Eko is
-        /// summoned off the current gesture, so releasing the stick to loose Eko's shot doesn't
-        /// also fire one of Nix's arrows or leave a stale reticle over the setup.
-        /// </summary>
-        public void SuppressUntilRelease()
+        /// <summary>Hand Nix an arrow back — from a walk-over pickup, an Eko fetch, or an Eko-arrow
+        /// catch. <paramref name="blue"/> marks it as one of Eko's arrows (drawn blue).</summary>
+        public void GiveArrow(bool blue)
         {
-            _suppressAim = true;
-            IsDrawing = false;
-            IsAiming = false;
-            Charge = 0f;
+            HasArrow = true;
+            ArrowIsBlue = blue;
+            LastFiredArrow = null;
         }
 
-        void Fire(Vector2 aimDir, float charge)
+        /// <summary>
+        /// Legacy name kept for the Eko-catch path: reloading Nix's shot mid-air now means handing
+        /// her one of Eko's blue arrows. See <see cref="EkoArrowTarget"/>.
+        /// </summary>
+        public void RefreshAirShot() => GiveArrow(true);
+
+        void Fire(Vector2 aimDir)
         {
             if (arrowPrefab == null)
             {
@@ -439,66 +335,40 @@ namespace NixAndEko.Combat
                 return;
             }
 
-            float speed = ArrowSpeed(charge);
             Quaternion rot = Quaternion.FromToRotation(Vector3.right, aimDir);
             Arrow arrow = Instantiate(arrowPrefab, Origin, rot); // origin = player center, matches the arc preview
             arrow.gameObject.SetActive(true); // template may be inactive; copies must run
 
-            if (player != null)
-            {
-                var arrowCol = arrow.GetComponent<Collider2D>();
-                if (arrowCol != null && player.Col != null)
-                    Physics2D.IgnoreCollision(arrowCol, player.Col, true);
-            }
+            arrow.SetNixArrow(this, player != null ? player.Col : null, ArrowIsBlue);
+            arrow.Launch(aimDir * arrowSpeed, 1f);
+            ApplyRecoil(aimDir, 1f);
 
-            arrow.Launch(aimDir * speed, charge);
-            ApplyRecoil(aimDir, charge);
-
-            // Airborne shots spend the bow until the archer next touches the ground (or fires
-            // within the coyote window, which still counts as grounded).
-            if (player != null && !player.GroundedForRecoil) _shotSpent = true;
+            // A blue (Eko's) arrow is spent on use — never a pickup and never an Eko-fetch target,
+            // and firing it must not clobber the reference to Nix's real downed arrow still out in
+            // the world (the Eko-catch flow), which stays the fetch target.
+            if (!arrow.blue) LastFiredArrow = arrow;
+            HasArrow = false;
+            ArrowIsBlue = false;
         }
 
-        /// <summary>
-        /// Recoil overrides the player's velocity opposite the shot — like a Celeste dash or
-        /// double jump, it's a clean burst to a fixed speed rather than a shove added on top of
-        /// whatever you were already carrying. Shooting downward launches you upward at a
-        /// consistent speed, shooting left sends you right at a consistent speed, etc. Scales
-        /// with draw charge. An axis the kick doesn't touch (e.g. horizontal, for a straight-down
-        /// shot) is left alone entirely, and an axis it does touch only overrides momentum that
-        /// opposes it — sailing right and firing straight down keeps that rightward speed instead
-        /// of zeroing it. Steering input is briefly locked out afterward so held input can't
-        /// immediately eat into the burst.
-        /// </summary>
+        // -------------------------------------------------------------------- Recoil
         void ApplyRecoil(Vector2 aimDir, float charge)
         {
             if (player == null) return;
             if (aimDir.sqrMagnitude < 0.0001f) return;
 
-            // Standing on the ground — or still within the coyote window after leaving it —
-            // only a downward shot (S / SW / SE) triggers recoil, that's the "bow jump".
-            // Sideways/upward ground shots never touch velocity, so running is never
-            // interrupted by grounded recoil.
+            // Grounded (or still within coyote): only a downward shot triggers recoil — the "bow jump".
             if (player.GroundedForRecoil && (!recoilWhileGrounded || aimDir.y > -0.5f)) return;
 
             float speed = Mathf.Lerp(recoilMin, recoilMax, charge);
-            // Nix's own recoil kicks opposite the shot.
             ApplyLaunch((-aimDir).normalized, speed);
         }
 
         /// <summary>
         /// The momentum boost Eko's arrow hands Nix when it catches her — a burst along the aim the
         /// phantom was planted with (aim up-right, get flung up-right), not opposite it like Nix's
-        /// own recoil. Scales with the charge Eko was holding.
-        ///
-        /// Unlike <see cref="ApplyRecoil"/> this replaces the whole velocity vector instead of
-        /// blending per-axis. The catch is a hand-off of the shot's momentum, so it has to read as
-        /// the direction the phantom was aiming and nothing else. A per-axis blend leaves any axis
-        /// the aim doesn't cover untouched, so a flat sideways shot catching Nix mid-fall flung her
-        /// sideways while she kept plummeting — and aim assist makes that the common case, since
-        /// homing curves the arrow down to wherever she has fallen to by the time it lands. Where
-        /// the catch happens is now irrelevant: only the frozen aim decides where she goes.
-        /// Momentum already running along that aim faster than the burst still wins, same as recoil.
+        /// own recoil. Replaces the whole velocity vector (never dampening momentum already running
+        /// along the aim), so only the frozen aim decides where she goes.
         /// </summary>
         public void EkoLaunch(Vector2 aimDir, float charge)
         {
@@ -508,22 +378,18 @@ namespace NixAndEko.Combat
             Vector2 dir = aimDir.normalized;
             float speed = Mathf.Lerp(recoilMin, recoilMax, charge);
 
-            // Never dampen momentum already running along the aim (matching ResolveRecoilAxis);
-            // everything perpendicular to it is discarded so the burst is purely Eko's vector.
             float along = Vector2.Dot(player.Velocity, dir);
             player.Velocity = dir * Mathf.Max(speed, along);
 
-            // An upward kick gets the floaty "rising" state, same as recoil.
             if (dir.y > 0.1f) player.Machine.ChangeState(player.Jump);
             if (recoilInputLock > 0f) player.LockInput(recoilInputLock);
         }
 
         /// <summary>
-        /// Nix's own recoil burst (the only caller now that EkoLaunch applies a whole vector).
-        /// Set velocity to a clean burst of <paramref name="speed"/> along <paramref name="kickDir"/>,
-        /// per-axis: an axis the kick doesn't touch is left alone, and one it does only overrides
-        /// opposing momentum (same-direction, faster momentum is kept). An upward burst enters the
-        /// floaty rising state, and steering input is briefly locked so held input can't eat it.
+        /// Nix's own recoil burst. Set velocity to a clean burst of <paramref name="speed"/> along
+        /// <paramref name="kickDir"/>, per-axis: an axis the kick doesn't touch is left alone, and
+        /// one it does only overrides opposing momentum. An upward burst enters the floaty rising
+        /// state, and steering input is briefly locked so held input can't eat it.
         /// </summary>
         void ApplyLaunch(Vector2 kickDir, float speed)
         {
@@ -534,20 +400,12 @@ namespace NixAndEko.Combat
             v.y = ResolveRecoilAxis(v.y, kickDir.y, speed);
             player.Velocity = v;
 
-            // An upward kick gets the floaty "rising" state (lighter gravity, apex hand-off to
-            // Fall) rather than whatever gravity the current state happens to apply.
             if (kickDir.y > 0.1f)
                 player.Machine.ChangeState(player.Jump);
 
             if (recoilInputLock > 0f) player.LockInput(recoilInputLock);
         }
 
-        /// <summary>
-        /// Blends the recoil burst onto one axis of existing velocity. A kick with (near) zero
-        /// component on this axis doesn't touch it at all. Otherwise it overrides — unless
-        /// existing momentum already runs the same direction as the kick and is faster, in which
-        /// case momentum wins and isn't dampened.
-        /// </summary>
         static float ResolveRecoilAxis(float current, float kickAxis, float speed)
         {
             if (Mathf.Abs(kickAxis) < 0.001f) return current;

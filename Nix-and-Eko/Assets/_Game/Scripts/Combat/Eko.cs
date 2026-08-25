@@ -1,4 +1,6 @@
 using NixAndEko.Environment;
+using NixAndEko.Player;
+using NixAndEko.Util;
 using UnityEngine;
 
 namespace NixAndEko.Combat
@@ -20,32 +22,48 @@ namespace NixAndEko.Combat
         [Tooltip("Straight-line preview of the shot Eko is holding.")]
         public LineRenderer trajectory;
         public Arrow arrowPrefab;
+        [Tooltip("Nix — for the swap and for the orb-return home.")]
+        public PlayerController player;
         [Tooltip("Small dot markers dropped wherever the preview crosses clean through a one-way platform instead of stopping there.")]
         public Transform[] passThroughMarkers;
+
+        [Header("Swap")]
+        [Tooltip("Seconds of freeze-frame when Nix shoots the phantom to swap places.")]
+        public float swapHitstop = 0.08f;
 
         [Header("Look")]
         [Tooltip("How far the straight-shot preview reaches before giving up.")]
         public float previewDistance = 40f;
         [Tooltip("Eko renders as a translucent blue echo of Nix's silhouette.")]
-        public Color tint = new Color(0.35f, 0.75f, 1f, 0.55f);
+        public Color tint = new Color(0.4f, 0.8f, 1f, 0.75f);
         public Color previewColor = new Color(0.35f, 0.75f, 1f, 0.9f);
 
         /// <summary>True while a phantom is standing in the world.</summary>
         public bool Active { get; private set; }
+        /// <summary>True while the phantom is holding a shot ready to loose (aiming pose).</summary>
+        public bool Prepared { get; private set; }
         /// <summary>The frozen aim direction — Eko never re-aims after being summoned.</summary>
         public Vector2 AimDirection { get; private set; } = Vector2.right;
 
         LayerMask _mask;
+        float _busyFlash;   // seconds of "occupied" blink remaining
 
-        /// <summary>Plant the phantom, frozen at <paramref name="position"/> aiming along <paramref name="aim"/>. <paramref name="facing"/> mirrors their silhouette to match Nix.</summary>
-        public void Summon(Vector3 position, Vector2 aim, int facing, LayerMask groundMask)
+        /// <summary>
+        /// Plant the phantom, frozen at <paramref name="position"/> aiming along <paramref name="aim"/>.
+        /// <paramref name="facing"/> mirrors their silhouette to match Nix. When <paramref name="prepared"/>
+        /// is true the phantom holds a shot (aiming pose + preview); otherwise it just stands there.
+        /// </summary>
+        public void Summon(Vector3 position, Vector2 aim, int facing, LayerMask groundMask, bool prepared)
         {
             transform.position = position;
             AimDirection = aim.sqrMagnitude > 0.0001f ? aim.normalized : Vector2.right;
             _mask = groundMask;
+            Prepared = prepared;
+            _busyFlash = 0f;
 
             if (sprite != null)
             {
+                sprite.enabled = true;
                 sprite.color = tint;
                 Vector3 s = sprite.transform.localScale;
                 s.x = Mathf.Abs(s.x) * (facing >= 0 ? 1 : -1);
@@ -54,7 +72,37 @@ namespace NixAndEko.Combat
 
             Active = true;
             gameObject.SetActive(true);
-            UpdatePreview();
+
+            if (prepared) UpdatePreview();
+            else if (trajectory != null) { trajectory.positionCount = 0; HidePassThroughMarkers(); }
+        }
+
+        /// <summary>Drop the held shot and switch to the standing pose — keeps the phantom planted
+        /// (used after Eko fires while Nix is airborne; the phantom lingers until she lands).</summary>
+        public void MakeStanding()
+        {
+            Prepared = false;
+            if (trajectory != null) { trajectory.positionCount = 0; HidePassThroughMarkers(); }
+        }
+
+        /// <summary>Blink to signal the phantom is occupied (e.g. an R2 fetch was refused).</summary>
+        public void FlashBusy() => _busyFlash = 0.3f;
+
+        void Update()
+        {
+            if (!Active || sprite == null) return;
+
+            // Occupied blink: pulse brighter, then settle back to the resting tint.
+            if (_busyFlash > 0f)
+            {
+                _busyFlash -= Time.deltaTime;
+                float k = Mathf.PingPong(Time.time * 12f, 1f);
+                sprite.color = Color.Lerp(tint, Color.white, k);
+            }
+            else if (sprite.color != tint)
+            {
+                sprite.color = tint;
+            }
         }
 
         /// <summary>
@@ -153,6 +201,7 @@ namespace NixAndEko.Combat
 
             arrow.flyStraight = true;
             arrow.isEkoArrow = true;
+            arrow.blue = true;                // Eko's arrows read blue
             arrow.ekoAim = AimDirection;      // the way Nix gets flung if this catches her
             arrow.SetCatchTarget(nixCol);     // never shove Nix; caught by overlap instead
             if (homeTarget != null) arrow.HomeTo(homeTarget);
@@ -164,8 +213,43 @@ namespace NixAndEko.Combat
         public void Dismiss()
         {
             Active = false;
+            Prepared = false;
             if (trajectory != null) trajectory.positionCount = 0;
             gameObject.SetActive(false);
+        }
+
+        /// <summary>Collapse into a blue orb that zips home to Nix, then dismiss — the return visual.</summary>
+        public void DismissWithOrb()
+        {
+            if (!Active) return;
+            Vector3 from = transform.position;
+            Vector3 to = player != null ? player.transform.position : from;
+            EkoOrb.Fly(from, to, 0.2f);
+            Dismiss();
+        }
+
+        /// <summary>
+        /// Nix shot the phantom: freeze-frame, then swap Nix and Eko's positions with a blue-orb zip
+        /// at each end. The phantom stays planted (now where Nix was), so a setup Eko survives the swap.
+        /// </summary>
+        public void OnNixArrowHit()
+        {
+            if (!Active || player == null) return;
+
+            Vector3 nixPos = player.transform.position;
+            Vector3 ekoPos = transform.position;
+
+            Hitstop.Freeze(swapHitstop);
+
+            player.transform.position = ekoPos;
+            player.Velocity = Vector2.zero;
+            transform.position = nixPos;
+
+            // Two orbs crossing: Nix's trail into Eko's old spot, Eko's into Nix's old spot.
+            EkoOrb.Fly(nixPos, ekoPos, 0.16f);
+            EkoOrb.Fly(ekoPos, nixPos, 0.16f);
+
+            if (Prepared) UpdatePreview();   // preview re-anchors to the phantom's new position
         }
     }
 }

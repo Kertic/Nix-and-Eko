@@ -38,6 +38,14 @@ namespace NixAndEko.Player
             SetClip(player.Anim);
             if (_frames == null || _frames.Length == 0) return;
 
+            // Melee poses are driven by the combo hit index, not a timed loop.
+            if (_state == PlayerController.AnimState.Melee)
+            {
+                int pose = Mathf.Clamp(player.MeleePose, 0, _frames.Length - 1);
+                _sr.sprite = _frames[pose];
+                return;
+            }
+
             float fps = FpsFor(_state);
             if (fps <= 0f || _frames.Length == 1)
             {
@@ -66,6 +74,8 @@ namespace NixAndEko.Player
                         ? Mathf.Abs(player.Velocity.x) / player.Config.moveSpeed
                         : 1f;
                     return walkFps * Mathf.Clamp(speed01, 0.35f, 1.2f);
+                case PlayerController.AnimState.Roll:
+                    return 16f;   // quick spin
                 default:
                     return 0f;   // single-frame poses
             }
@@ -87,6 +97,8 @@ namespace NixAndEko.Player
                 PlayerController.AnimState.WallSlide => ArcherSprites.WallSlideFrames,
                 PlayerController.AnimState.Crouch => ArcherSprites.CrouchFrames,
                 PlayerController.AnimState.Hurt => ArcherSprites.HurtFrames,
+                PlayerController.AnimState.Melee => ArcherSprites.MeleeFrames,
+                PlayerController.AnimState.Roll => ArcherSprites.RollFrames,
                 _ => ArcherSprites.IdleFrames,
             };
             if (_frames != null && _frames.Length > 0) _sr.sprite = _frames[0];

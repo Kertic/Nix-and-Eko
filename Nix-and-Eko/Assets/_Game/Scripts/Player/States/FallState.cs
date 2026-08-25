@@ -9,6 +9,7 @@ namespace NixAndEko.Player.States
 
         public override void Tick(float dt)
         {
+            if (TryMeleeOrRoll()) return;
             if (P.Grounded)
             {
                 P.Machine.ChangeState(Mathf.Abs(In.Move.x) > 0.2f ? (Core.IState)P.MoveS : P.Idle);

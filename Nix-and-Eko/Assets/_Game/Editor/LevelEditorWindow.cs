@@ -640,6 +640,8 @@ namespace NixAndEko.EditorTools
             BlockType.Gate => Palette.Gate,
             BlockType.TargetSwitch => Palette.Switch,
             BlockType.BreakableWall => Palette.Breakable,
+            BlockType.EnemyWalker => new Color(0.55f, 0.3f, 0.7f),
+            BlockType.EnemySlammer => new Color(0.8f, 0.3f, 0.3f),
             _ => Palette.Ground,
         };
 
