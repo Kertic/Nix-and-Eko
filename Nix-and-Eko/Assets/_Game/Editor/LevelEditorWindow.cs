@@ -37,6 +37,80 @@ namespace NixAndEko.EditorTools
         LevelData[] _library = new LevelData[0];
         bool _showLibrary = true;
 
+        /// <summary>
+        /// Every label in the window, with its hover tooltip. Kept static so the GUIContent isn't
+        /// rebuilt on every OnGUI pass, and kept together so the wording stays consistent.
+        /// </summary>
+        static class Labels
+        {
+            public static readonly GUIContent LevelAsset = new GUIContent("Level Asset",
+                "The level being edited. Drag any Level asset here, or pick one from the list above.");
+            public static readonly GUIContent CreateNew = new GUIContent("Create New Level",
+                "Create an empty level asset and start editing it.");
+
+            public static readonly GUIContent[] Tools =
+            {
+                new GUIContent("Place", "Drag a rectangle in the Scene view to place a block of the chosen type. A plain click places one at its default size."),
+                new GUIContent("Select", "Click a block to select it, then edit its values below or drag its handles in the Scene view."),
+                new GUIContent("Erase", "Click a block in the Scene view to delete it. No confirmation — use Undo if you miss."),
+                new GUIContent("Spawn", "Click in the Scene view to move the player's spawn point."),
+            };
+
+            public static readonly GUIContent PaintType = new GUIContent("Block",
+                "Which kind of block the Place tool paints.");
+            public static readonly GUIContent Grid = new GUIContent("Grid Snap",
+                "Grid size that placed and dragged blocks snap to. Blocks snap by their edges, so " +
+                "different sizes still line up flush. Set to 0 for free placement.");
+            public static readonly GUIContent AutoRebuild = new GUIContent("Rebuild On Change",
+                "Rebuild the playable scene after every edit, so the Scene view always shows the " +
+                "real level. Turn off if rebuilds get slow on a large level.");
+
+            public static readonly GUIContent Spawn = new GUIContent("Player Spawn",
+                "Where the player starts (and respawns from, before reaching a checkpoint).");
+            public static readonly GUIContent KillY = new GUIContent("Kill Y",
+                "Falling below this world Y respawns the player. Keep it under the lowest floor.");
+
+            public static readonly GUIContent Rebuild = new GUIContent("Rebuild Scene",
+                "Rebuild the playable scene from this asset now — level geometry, the player and " +
+                "the camera. Replaces any previous build.");
+            public static readonly GUIContent Frame = new GUIContent("Frame Level",
+                "Move the Scene view camera to fit the whole level.");
+            public static readonly GUIContent SaveAs = new GUIContent("Save As...",
+                "Save a copy of this level under a new name and switch to editing the copy. The " +
+                "original keeps whatever it had at its last save.");
+            public static readonly GUIContent DeleteLevel = new GUIContent("Delete Level",
+                "Permanently delete this level asset from disk. Cannot be undone.");
+            public static readonly GUIContent ClearBlocks = new GUIContent("Clear All Blocks",
+                "Remove every block from this level, keeping the spawn point and Kill Y. Undoable.");
+            public static readonly GUIContent Refresh = new GUIContent("Refresh",
+                "Re-scan the level folder for assets added or removed outside this window.");
+
+            public static readonly GUIContent BlockType = new GUIContent("Type",
+                "What this block is. Changing it keeps the position and size, and swaps which " +
+                "type-specific settings apply.");
+            public static readonly GUIContent Position = new GUIContent("Position",
+                "World position of the block's centre.");
+            public static readonly GUIContent Size = new GUIContent("Size",
+                "Width and height in world units.");
+            public static readonly GUIContent Patrol = new GUIContent("Patrol Offset",
+                "How far, and in which direction, this platform travels from its start position " +
+                "before turning back.");
+            public static readonly GUIContent Speed = new GUIContent("Speed",
+                "Platform travel speed, in units per second.");
+            public static readonly GUIContent OpenOffset = new GUIContent("Open Offset",
+                "How far the gate moves when opened — usually straight up, by its own height.");
+            public static readonly GUIContent LinkId = new GUIContent("Link Id",
+                "Switches drive every gate sharing their link id. Give a switch and its gate(s) " +
+                "the same number.");
+            public static readonly GUIContent MinCharge = new GUIContent("Min Charge",
+                "Minimum bow draw (0-1) that breaks this wall. A shot below it bounces off.");
+
+            public static readonly GUIContent Duplicate = new GUIContent("Duplicate",
+                "Add a copy of this block one block-width to the right, snapped to the grid.");
+            public static readonly GUIContent DeleteBlock = new GUIContent("Delete",
+                "Remove this block from the level. Undoable.");
+        }
+
         [MenuItem("Tools/Nix & Eko/Level Editor", priority = 10)]
         public static void Open()
         {
@@ -63,13 +137,13 @@ namespace NixAndEko.EditorTools
             DrawLibrary();
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Level Asset", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(Labels.LevelAsset, EditorStyles.boldLabel);
             _level = (LevelData)EditorGUILayout.ObjectField(_level, typeof(LevelData), false);
 
             if (_level == null)
             {
                 EditorGUILayout.HelpBox("Assign a Level asset, pick one above, or create one.", MessageType.Info);
-                if (GUILayout.Button("Create New Level"))
+                if (GUILayout.Button(Labels.CreateNew))
                     CreateLevelAsset();
                 EditorGUILayout.EndScrollView();
                 return;
@@ -77,12 +151,12 @@ namespace NixAndEko.EditorTools
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Tool", EditorStyles.boldLabel);
-            _tool = (Tool)GUILayout.Toolbar((int)_tool, new[] { "Place", "Select", "Erase", "Spawn" });
+            _tool = (Tool)GUILayout.Toolbar((int)_tool, Labels.Tools);
 
             if (_tool == Tool.Place)
             {
                 EditorGUILayout.Space(2);
-                _paintType = (BlockType)EditorGUILayout.EnumPopup("Block", _paintType);
+                _paintType = (BlockType)EditorGUILayout.EnumPopup(Labels.PaintType, _paintType);
                 EditorGUILayout.HelpBox(
                     "Drag in the Scene view to place a block of this type. A plain click places one " +
                     "at its default size.", MessageType.None);
@@ -102,14 +176,14 @@ namespace NixAndEko.EditorTools
             }
 
             EditorGUILayout.Space();
-            _grid = EditorGUILayout.Slider("Grid Snap", _grid, 0f, 4f);
-            _autoRebuild = EditorGUILayout.Toggle("Rebuild On Change", _autoRebuild);
+            _grid = EditorGUILayout.Slider(Labels.Grid, _grid, 0f, 4f);
+            _autoRebuild = EditorGUILayout.Toggle(Labels.AutoRebuild, _autoRebuild);
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Level", EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck();
-            Vector2 spawn = EditorGUILayout.Vector2Field("Player Spawn", _level.playerSpawn);
-            float killY = EditorGUILayout.FloatField("Kill Y", _level.killY);
+            Vector2 spawn = EditorGUILayout.Vector2Field(Labels.Spawn, _level.playerSpawn);
+            float killY = EditorGUILayout.FloatField(Labels.KillY, _level.killY);
             if (EditorGUI.EndChangeCheck())
             {
                 Undo.RecordObject(_level, "Edit Level");
@@ -124,15 +198,15 @@ namespace NixAndEko.EditorTools
             EditorGUILayout.Space();
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Rebuild Scene")) Rebuild();
-                if (GUILayout.Button("Frame Level")) FrameLevel();
+                if (GUILayout.Button(Labels.Rebuild)) Rebuild();
+                if (GUILayout.Button(Labels.Frame)) FrameLevel();
             }
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Save As...")) SaveLevelAs();
-                if (GUILayout.Button("Delete Level")) DeleteLevel();
+                if (GUILayout.Button(Labels.SaveAs)) SaveLevelAs();
+                if (GUILayout.Button(Labels.DeleteLevel)) DeleteLevel();
             }
-            if (GUILayout.Button("Clear All Blocks") &&
+            if (GUILayout.Button(Labels.ClearBlocks) &&
                 EditorUtility.DisplayDialog("Clear level?",
                     "Remove all " + _level.blocks.Count + " blocks from " + _level.name + "?", "Clear", "Cancel"))
             {
@@ -152,9 +226,12 @@ namespace NixAndEko.EditorTools
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                _showLibrary = EditorGUILayout.Foldout(_showLibrary, "Levels (" + _library.Length + ")", true);
+                _showLibrary = EditorGUILayout.Foldout(_showLibrary,
+                    new GUIContent("Levels (" + _library.Length + ")",
+                        "Every level asset saved in " + LevelFolder + ". Click one to open it for editing."),
+                    true);
                 GUILayout.FlexibleSpace();
-                if (GUILayout.Button("Refresh", GUILayout.Width(60f))) RefreshLibrary();
+                if (GUILayout.Button(Labels.Refresh, GUILayout.Width(60f))) RefreshLibrary();
             }
             if (!_showLibrary) return;
 
@@ -172,7 +249,12 @@ namespace NixAndEko.EditorTools
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUI.enabled = !isCurrent;
-                    if (GUILayout.Button((isCurrent ? "> " : "   ") + lvl.name, EditorStyles.miniButton))
+                    var entry = new GUIContent((isCurrent ? "> " : "   ") + lvl.name,
+                        isCurrent
+                            ? "Currently open for editing."
+                            : "Open '" + lvl.name + "' for editing. Unsaved changes to the current " +
+                              "level stay on its asset until Unity next saves.");
+                    if (GUILayout.Button(entry, EditorStyles.miniButton))
                         LoadLevel(lvl);
                     GUI.enabled = true;
                     GUILayout.Label(lvl.blocks.Count + " blk", GUILayout.Width(44f));
@@ -275,9 +357,9 @@ namespace NixAndEko.EditorTools
             EditorGUILayout.LabelField("Selected Block", EditorStyles.boldLabel);
 
             EditorGUI.BeginChangeCheck();
-            var type = (BlockType)EditorGUILayout.EnumPopup("Type", blk.type);
-            Vector2 pos = EditorGUILayout.Vector2Field("Position", blk.position);
-            Vector2 size = EditorGUILayout.Vector2Field("Size", blk.size);
+            var type = (BlockType)EditorGUILayout.EnumPopup(Labels.BlockType, blk.type);
+            Vector2 pos = EditorGUILayout.Vector2Field(Labels.Position, blk.position);
+            Vector2 size = EditorGUILayout.Vector2Field(Labels.Size, blk.size);
 
             int linkId = blk.linkId;
             Vector2 patrol = blk.patrolOffset;
@@ -287,18 +369,18 @@ namespace NixAndEko.EditorTools
 
             if (type == BlockType.MovingPlatform)
             {
-                patrol = EditorGUILayout.Vector2Field("Patrol Offset", patrol);
-                speed = EditorGUILayout.FloatField("Speed", speed);
+                patrol = EditorGUILayout.Vector2Field(Labels.Patrol, patrol);
+                speed = EditorGUILayout.FloatField(Labels.Speed, speed);
             }
             if (type == BlockType.Gate)
             {
-                openOffset = EditorGUILayout.Vector2Field("Open Offset", openOffset);
-                linkId = EditorGUILayout.IntField("Link Id", linkId);
+                openOffset = EditorGUILayout.Vector2Field(Labels.OpenOffset, openOffset);
+                linkId = EditorGUILayout.IntField(Labels.LinkId, linkId);
             }
             if (type == BlockType.TargetSwitch)
-                linkId = EditorGUILayout.IntField("Link Id", linkId);
+                linkId = EditorGUILayout.IntField(Labels.LinkId, linkId);
             if (type == BlockType.BreakableWall)
-                minCharge = EditorGUILayout.Slider("Min Charge", minCharge, 0f, 1f);
+                minCharge = EditorGUILayout.Slider(Labels.MinCharge, minCharge, 0f, 1f);
 
             if (EditorGUI.EndChangeCheck())
             {
@@ -316,7 +398,7 @@ namespace NixAndEko.EditorTools
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Duplicate"))
+                if (GUILayout.Button(Labels.Duplicate))
                 {
                     Undo.RecordObject(_level, "Duplicate Block");
                     LevelBlock copy = blk.Clone();
@@ -329,7 +411,7 @@ namespace NixAndEko.EditorTools
                     _selected = _level.blocks.Count - 1;
                     Dirty();
                 }
-                if (GUILayout.Button("Delete"))
+                if (GUILayout.Button(Labels.DeleteBlock))
                 {
                     Undo.RecordObject(_level, "Delete Block");
                     _level.blocks.RemoveAt(_selected);
@@ -350,12 +432,21 @@ namespace NixAndEko.EditorTools
             DrawBlockOverlays();
             DrawSpawnMarker();
 
+            // Move handles must be drawn BEFORE the click handling below, not after. Handles claim
+            // a MouseDown as they're drawn; if the picking logic runs first it calls Use() on any
+            // click landing inside a block's rect, eating the event before the handles ever see
+            // it. That left only the parts of an arrow poking out past the block grabbable — so on
+            // a block wide enough to swallow its own X arrow, that axis simply couldn't be dragged.
+            if (_tool == Tool.Select) DrawSelectedHandle();
+
             if (_tool != Tool.Select)
                 HandleUtility.AddDefaultControl(id); // take clicks so we do not select scene objects
 
             switch (e.type)
             {
-                case EventType.MouseDown when e.button == 0 && !e.alt:
+                // A handle that took this click has already set hotControl (and marked the event
+                // Used); don't also treat it as a pick.
+                case EventType.MouseDown when e.button == 0 && !e.alt && GUIUtility.hotControl == 0:
                     OnMouseDown(MouseWorld(e), e);
                     break;
 
@@ -373,7 +464,6 @@ namespace NixAndEko.EditorTools
             }
 
             if (_dragging) DrawPendingRect();
-            if (_tool == Tool.Select) DrawSelectedHandle();
         }
 
         void OnMouseDown(Vector2 world, Event e)
@@ -450,15 +540,44 @@ namespace NixAndEko.EditorTools
             Dirty();
         }
 
+        /// <summary>
+        /// Move handles for the selected block: one arrow per axis plus a square in the middle for
+        /// free dragging.
+        ///
+        /// Deliberately not <see cref="Handles.PositionHandle"/>. That draws a Z arrow too, and in
+        /// a 2D scene view the camera looks straight down Z — so the Z arrow collapses to a dot
+        /// sitting exactly on the origin where the X and Y arrows start, and its (plus the XY plane
+        /// quad's) pick radius swallows drags meant for the visible axes. That's what made an axis
+        /// impossible to grab without rotating into 3D. With no Z handle in play the problem can't
+        /// occur.
+        /// </summary>
         void DrawSelectedHandle()
         {
             if (_selected < 0 || _selected >= _level.blocks.Count) return;
             LevelBlock blk = _level.blocks[_selected];
 
+            Vector3 p = blk.position;
+            float hs = HandleUtility.GetHandleSize(p);
+
             EditorGUI.BeginChangeCheck();
-            Vector3 moved = Handles.PositionHandle(blk.position, Quaternion.identity);
+
+            Handles.color = Handles.xAxisColor;
+            Vector3 movedX = Handles.Slider(p, Vector3.right, hs, Handles.ArrowHandleCap, 0f);
+
+            Handles.color = Handles.yAxisColor;
+            Vector3 movedY = Handles.Slider(p, Vector3.up, hs, Handles.ArrowHandleCap, 0f);
+
+            Handles.color = Handles.centerColor;
+            Vector3 movedFree = Handles.FreeMoveHandle(p, hs * 0.16f, Vector3.zero,
+                                                       Handles.RectangleHandleCap);
+            Handles.color = Color.white;
+
             if (EditorGUI.EndChangeCheck())
             {
+                // Only one handle can be dragged at a time; the others return p unchanged, so
+                // summing the deltas applies exactly the one that moved.
+                Vector3 moved = p + (movedX - p) + (movedY - p) + (movedFree - p);
+
                 Undo.RecordObject(_level, "Move Block");
                 blk.position = SnapBlock(new Vector2(moved.x, moved.y), blk.size, blk.type);
                 Dirty();
