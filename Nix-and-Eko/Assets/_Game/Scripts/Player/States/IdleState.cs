@@ -17,8 +17,13 @@ namespace NixAndEko.Player.States
         public override void FixedTick(float fdt)
         {
             P.MoveHorizontal(0f, Cfg.groundDecel);
-            // Keep a tiny downward bias so the ground probe stays satisfied on slopes/edges.
-            if (P.Velocity.y > 0f) P.Velocity = new Vector2(P.Velocity.x, 0f);
+            // Zero vertical velocity outright rather than only clamping upward drift. Grounded
+            // states never re-apply gravity, so any small downward residual left over from
+            // landing — a one-way platform's effector resolves the landing contact more softly
+            // than solid ground's plain collider, and can leave a sliver of it uncancelled — would
+            // otherwise persist untouched forever, reading as a slow, endless slide through the
+            // platform. The ground probe is a pure position check, so this can't cost us contact.
+            P.Velocity = new Vector2(P.Velocity.x, 0f);
         }
     }
 }

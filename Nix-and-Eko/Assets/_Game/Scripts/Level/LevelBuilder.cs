@@ -116,10 +116,14 @@ namespace NixAndEko.Level
                                        ProceduralSprite.Shape.Plank, layer, 1, SeedFor(b));
             var col = go.GetComponent<BoxCollider2D>();
             col.usedByEffector = true;
-            col.edgeRadius = 0.05f;   // rounds corners so skimming an edge (e.g. an adjacent tile's seam) doesn't snag
+            // No edge radius: it inflates the collider past the visible plank, so resting on top
+            // would float above the sprite and the surface Y wouldn't match what's drawn. It was
+            // there to stop edges snagging, which OneWayPassenger's feet-above-top rule now
+            // prevents outright.
+            col.edgeRadius = 0f;
             var eff = go.AddComponent<PlatformEffector2D>();
             eff.useOneWay = true;
-            eff.surfaceArc = 100f;    // a wide pass-through zone so jumping up through it from below can't clip a "solid" contact
+            eff.surfaceArc = 100f;    // arrows: only near-vertical contacts count as the surface
             eff.useSideFriction = false;
             eff.useSideBounce = false;
             go.AddComponent<OneWayPlatform>().dropSeconds = 0.35f;

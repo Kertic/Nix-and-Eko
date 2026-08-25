@@ -144,15 +144,15 @@ namespace NixAndEko.EditorTools
         // ============================================================ big test level (as data)
 
         /// <summary>
-        /// A large multi-zone playground: a long surface run, a wall-slide descent, a vertical
-        /// shaft climbed with recoil pogo shots, a hazard gauntlet, a switch-and-gate puzzle and
-        /// a breakable-wall vault. Roughly 150 x 65 units.
+        /// A large multi-zone playground: a benchmarking zone (unit-block distance ruler, height
+        /// ruler, gap-distance ladder) to tune feel, a long surface run, a wall-slide descent, a
+        /// vertical shaft climbed with recoil pogo shots, a hazard gauntlet, a switch-and-gate
+        /// puzzle and a breakable-wall vault. Roughly 300 x 65 units.
         /// </summary>
         public static LevelData GenerateTestLevel()
         {
             var d = ScriptableObject.CreateInstance<LevelData>();
             d.name = "TestLevel";
-            d.playerSpawn = new Vector2(-56f, -2f);
             d.killY = -40f;
 
             var b = new List<LevelBlock>();
@@ -167,9 +167,47 @@ namespace NixAndEko.EditorTools
                 });
             }
 
+            // ---------------- Zone 0: benchmarking ground (west of everything else) ----------------
+            // Built for tuning feel rather than exploration: a run of literal 1×1 unit blocks to
+            // gauge distance by eye (or by counting), a shaft with a tick mark at every integer
+            // height to read a jump's peak against, and a line of landing pads with gaps stepping
+            // 1 through 10 units to see exactly how far a jump carries horizontally. Cross-check
+            // against PlayerConfig's derived MaxJumpHeight / MaxAirTime / MaxJumpDistance — or lock
+            // one of them and dial the physics in to land on an exact number here (see
+            // PlayerConfigEditor's lock toggles).
+            const float benchFloorY = -5.5f;   // top surface at -5, matching Zone 1's plateau
+
+            Block(BlockType.Ground, -224f, 8f, 2f, 44f);   // far-west world wall
+
+            // -- distance ruler: standard 1x1 unit blocks, laid one after another --
+            for (int i = 0; i < 28; i++)
+                Block(BlockType.Ground, -222f + i, benchFloorY, 1f, 1f);
+
+            Block(BlockType.Checkpoint, -220f, -4f, 1f, 2f);
+            d.playerSpawn = new Vector2(-220f, -2f);
+
+            // -- height ruler: a shaft with a tick mark at every integer height above the floor --
+            Block(BlockType.Ground, -195f, 8f, 2f, 44f);           // shaft left wall
+            Block(BlockType.Ground, -181f, 8f, 2f, 44f);           // shaft right wall
+            Block(BlockType.Ground, -188f, benchFloorY, 12f, 1f);  // shaft floor, same top as the ruler
+            for (int h = 1; h <= 10; h++)
+                Block(BlockType.Ground, -193f, -5f + h - 0.15f, 1f, 0.3f); // tick mark, top = floor + h
+
+            // -- distance test: landing pads with gaps stepping 1 through 10 units --
+            float benchX = -177f;
+            Block(BlockType.Ground, benchX + 1f, -6f, 2f, 2f);     // first pad
+            benchX += 2f;
+            for (int gap = 1; gap <= 10; gap++)
+            {
+                benchX += gap;                                     // the gap itself
+                Block(BlockType.Ground, benchX + 1f, -6f, 2f, 2f); // pad after a `gap`-unit gap
+                benchX += 2f;
+            }
+            float connectorWidth = -76f - benchX;                  // bridge back to Zone 1's plateau
+            Block(BlockType.Ground, benchX + connectorWidth * 0.5f, -6f, connectorWidth, 2f);
+
             // ---------------- Zone 1: surface run (west) ----------------
             Block(BlockType.Ground, -56f, -6f, 40f, 2f);        // start plateau
-            Block(BlockType.Ground, -76f, 2f, 2f, 18f);         // west boundary wall
             Block(BlockType.Ground, -30f, -8f, 14f, 2f);        // step down
             Block(BlockType.Hazard, -30f, -6.6f, 10f, 0.6f);    // spike strip to hop
             Block(BlockType.Ground, -16f, -6f, 12f, 2f);

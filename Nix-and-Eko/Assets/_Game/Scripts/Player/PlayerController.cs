@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using NixAndEko.Core;
+using NixAndEko.Environment;
 using NixAndEko.Player.States;
 using UnityEngine;
 
@@ -159,6 +161,8 @@ namespace NixAndEko.Player
         void FixedUpdate() => _machine.FixedTick(Time.fixedDeltaTime);
 
         // ------------------------------------------------------------------ Sensing
+        readonly List<Collider2D> _probeHits = new List<Collider2D>();
+
         void Sense()
         {
             WasGrounded = Grounded;
@@ -167,15 +171,50 @@ namespace NixAndEko.Player
             // Ground: thin box just under the feet.
             Vector2 feet = new Vector2(b.center.x, b.min.y);
             Vector2 groundSize = new Vector2(b.size.x * 0.92f, groundProbe * 2f);
-            Grounded = Physics2D.OverlapBox(feet, groundSize, 0f, groundMask) &&
-                       Velocity.y <= 0.01f;
+            Grounded = ProbeGround(feet, groundSize) && Velocity.y <= 0.01f;
 
             // Walls: boxes at each side around torso height.
             Vector2 mid = new Vector2(b.center.x, b.center.y);
             Vector2 sideSize = new Vector2(wallProbe * 2f, b.size.y * 0.7f);
-            bool wallR = Physics2D.OverlapBox(mid + new Vector2(b.extents.x, 0f), sideSize, 0f, groundMask);
-            bool wallL = Physics2D.OverlapBox(mid - new Vector2(b.extents.x, 0f), sideSize, 0f, groundMask);
+            bool wallR = ProbeWall(mid + new Vector2(b.extents.x, 0f), sideSize);
+            bool wallL = ProbeWall(mid - new Vector2(b.extents.x, 0f), sideSize);
             WallDir = wallR ? 1 : wallL ? -1 : 0;
+        }
+
+        /// <summary>
+        /// Ground probe that agrees with what we'll actually collide with. A raw overlap test
+        /// ignores <c>Physics2D.IgnoreCollision</c>, so a one-way platform the player is currently
+        /// passing through would still register as ground — landing them in mid-air, halfway
+        /// inside the plank, because the grounded states then zero out their fall. Filtering by
+        /// <see cref="OneWayPlatform.IsSolid"/> keeps sensing and collision telling the same story.
+        /// </summary>
+        bool ProbeGround(Vector2 center, Vector2 size)
+        {
+            int n = Physics2D.OverlapBox(center, size, 0f, ProbeFilter(), _probeHits);
+            for (int i = 0; i < n; i++)
+                if (OneWayPlatform.IsSolid(_probeHits[i], Col)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Wall probe. One-way platforms are never walls — there's nothing to cling to on the side
+        /// of a plank you're meant to pass straight through, and treating one as a wall is what
+        /// makes a jump alongside it snag into a wall-slide.
+        /// </summary>
+        bool ProbeWall(Vector2 center, Vector2 size)
+        {
+            int n = Physics2D.OverlapBox(center, size, 0f, ProbeFilter(), _probeHits);
+            for (int i = 0; i < n; i++)
+                if (!OneWayPlatform.Is(_probeHits[i])) return true;
+            return false;
+        }
+
+        /// <summary>Rebuilt per probe so a runtime change to <see cref="groundMask"/> is honored.</summary>
+        ContactFilter2D ProbeFilter()
+        {
+            var filter = new ContactFilter2D { useTriggers = false };
+            filter.SetLayerMask(groundMask);
+            return filter;
         }
 
         void UpdateTimers(float dt)

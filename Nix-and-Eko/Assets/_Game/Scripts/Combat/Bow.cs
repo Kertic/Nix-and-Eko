@@ -1,3 +1,4 @@
+using NixAndEko.Environment;
 using NixAndEko.Player;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -29,6 +30,8 @@ namespace NixAndEko.Combat
         public LineRenderer trajectory;
         [Tooltip("Small marker drawn where the drag started. Optional.")]
         public Transform dragAnchorIndicator;
+        [Tooltip("Small dot markers dropped wherever the trajectory preview crosses clean through a one-way platform instead of stopping there.")]
+        public Transform[] passThroughMarkers;
 
         [Header("Trajectory preview")]
         [Tooltip("How many sample points along the predicted arc.")]
@@ -312,7 +315,12 @@ namespace NixAndEko.Combat
             UpdateTrajectory();
         }
 
-        /// <summary>Preview the arrow's parabolic arc, clipped at the first surface it would hit.</summary>
+        /// <summary>
+        /// Preview the arrow's parabolic arc, clipped at the first surface it would actually stop
+        /// at. A one-way platform only clips the line if the arc would hit its blocking face
+        /// (<see cref="OneWayPlatform.Blocks"/>) — a shot arcing up through one from below instead
+        /// gets a small marker dropped where it crosses, matching what the real arrow will do.
+        /// </summary>
         void UpdateTrajectory()
         {
             if (trajectory == null) return;
@@ -320,6 +328,7 @@ namespace NixAndEko.Combat
             if (!IsDrawing)
             {
                 trajectory.positionCount = 0;
+                HidePassThroughMarkers();
                 return;
             }
 
@@ -332,6 +341,8 @@ namespace NixAndEko.Combat
             trajectory.positionCount = trajectorySteps;
             Vector2 prev = p0;
             int count = 0;
+            int markerCount = 0;
+            Collider2D lastPassThrough = null;
 
             for (int i = 0; i < trajectorySteps; i++)
             {
@@ -343,8 +354,26 @@ namespace NixAndEko.Combat
                     var hit = Physics2D.Linecast(prev, pt, mask);
                     if (hit.collider != null)
                     {
-                        trajectory.SetPosition(count++, hit.point);
-                        break;
+                        if (OneWayPlatform.Blocks(hit))
+                        {
+                            trajectory.SetPosition(count++, hit.point);
+                            prev = pt;
+                            break;
+                        }
+
+                        // Passes clean through this one-way platform — flag the crossing instead
+                        // of stopping the line there. Guarded against re-flagging the same
+                        // collider on every remaining sample while still inside its thickness.
+                        if (hit.collider != lastPassThrough &&
+                            passThroughMarkers != null && markerCount < passThroughMarkers.Length)
+                        {
+                            ShowPassThroughMarker(markerCount++, hit.point);
+                            lastPassThrough = hit.collider;
+                        }
+                    }
+                    else
+                    {
+                        lastPassThrough = null;
                     }
                 }
 
@@ -353,10 +382,27 @@ namespace NixAndEko.Combat
             }
 
             trajectory.positionCount = count;
+            HidePassThroughMarkers(markerCount);
 
             Color c = Color.Lerp(chargeStartColor, chargeFullColor, Charge);
             trajectory.startColor = c;
             trajectory.endColor = new Color(c.r, c.g, c.b, 0f); // fade out toward the end
+        }
+
+        void ShowPassThroughMarker(int index, Vector2 pos)
+        {
+            if (passThroughMarkers == null || index >= passThroughMarkers.Length) return;
+            Transform m = passThroughMarkers[index];
+            if (m == null) return;
+            m.gameObject.SetActive(true);
+            m.position = pos;
+        }
+
+        void HidePassThroughMarkers(int fromIndex = 0)
+        {
+            if (passThroughMarkers == null) return;
+            for (int i = fromIndex; i < passThroughMarkers.Length; i++)
+                if (passThroughMarkers[i] != null) passThroughMarkers[i].gameObject.SetActive(false);
         }
 
         /// <summary>
@@ -441,17 +487,39 @@ namespace NixAndEko.Combat
         }
 
         /// <summary>
-        /// The momentum boost Eko's arrow hands Nix when it catches her — a burst along Eko's aim
-        /// itself (aim up-right, get flung up-right), not opposite it like Nix's own recoil. Scales
-        /// with the charge Eko was holding and reuses the same per-axis override + rising-state feel.
+        /// The momentum boost Eko's arrow hands Nix when it catches her — a burst along the aim the
+        /// phantom was planted with (aim up-right, get flung up-right), not opposite it like Nix's
+        /// own recoil. Scales with the charge Eko was holding.
+        ///
+        /// Unlike <see cref="ApplyRecoil"/> this replaces the whole velocity vector instead of
+        /// blending per-axis. The catch is a hand-off of the shot's momentum, so it has to read as
+        /// the direction the phantom was aiming and nothing else. A per-axis blend leaves any axis
+        /// the aim doesn't cover untouched, so a flat sideways shot catching Nix mid-fall flung her
+        /// sideways while she kept plummeting — and aim assist makes that the common case, since
+        /// homing curves the arrow down to wherever she has fallen to by the time it lands. Where
+        /// the catch happens is now irrelevant: only the frozen aim decides where she goes.
+        /// Momentum already running along that aim faster than the burst still wins, same as recoil.
         /// </summary>
         public void EkoLaunch(Vector2 aimDir, float charge)
         {
+            if (player == null) return;
             if (aimDir.sqrMagnitude < 0.0001f) return;
-            ApplyLaunch(aimDir.normalized, Mathf.Lerp(recoilMin, recoilMax, charge));
+
+            Vector2 dir = aimDir.normalized;
+            float speed = Mathf.Lerp(recoilMin, recoilMax, charge);
+
+            // Never dampen momentum already running along the aim (matching ResolveRecoilAxis);
+            // everything perpendicular to it is discarded so the burst is purely Eko's vector.
+            float along = Vector2.Dot(player.Velocity, dir);
+            player.Velocity = dir * Mathf.Max(speed, along);
+
+            // An upward kick gets the floaty "rising" state, same as recoil.
+            if (dir.y > 0.1f) player.Machine.ChangeState(player.Jump);
+            if (recoilInputLock > 0f) player.LockInput(recoilInputLock);
         }
 
         /// <summary>
+        /// Nix's own recoil burst (the only caller now that EkoLaunch applies a whole vector).
         /// Set velocity to a clean burst of <paramref name="speed"/> along <paramref name="kickDir"/>,
         /// per-axis: an axis the kick doesn't touch is left alone, and one it does only overrides
         /// opposing momentum (same-direction, faster momentum is kept). An upward burst enters the

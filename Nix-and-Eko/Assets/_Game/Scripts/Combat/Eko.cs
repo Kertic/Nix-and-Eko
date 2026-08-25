@@ -1,3 +1,4 @@
+using NixAndEko.Environment;
 using UnityEngine;
 
 namespace NixAndEko.Combat
@@ -19,6 +20,8 @@ namespace NixAndEko.Combat
         [Tooltip("Straight-line preview of the shot Eko is holding.")]
         public LineRenderer trajectory;
         public Arrow arrowPrefab;
+        [Tooltip("Small dot markers dropped wherever the preview crosses clean through a one-way platform instead of stopping there.")]
+        public Transform[] passThroughMarkers;
 
         [Header("Look")]
         [Tooltip("How far the straight-shot preview reaches before giving up.")]
@@ -55,8 +58,11 @@ namespace NixAndEko.Combat
         }
 
         /// <summary>
-        /// Redraw the shot preview. A straight arrow needs no arc simulation — a single raycast
-        /// gives the exact flight path and the surface it stops at.
+        /// Redraw the shot preview. A straight arrow needs no arc simulation — a raycast gives the
+        /// exact flight path and the surface it stops at. A one-way platform only stops the line if
+        /// the shot would actually hit its blocking face (<see cref="OneWayPlatform.Blocks"/>) — a
+        /// shallow shot that would pass clean through instead gets a marker dropped at the crossing
+        /// and the cast continues past it, same as the real arrow will.
         /// </summary>
         public void UpdatePreview()
         {
@@ -64,18 +70,64 @@ namespace NixAndEko.Combat
 
             Vector2 origin = transform.position;
             Vector2 end = origin + AimDirection * previewDistance;
+            int markerCount = 0;
 
             if (_mask.value != 0)
             {
-                var hit = Physics2D.Raycast(origin, AimDirection, previewDistance, _mask);
-                if (hit.collider != null) end = hit.point;
+                Vector2 castOrigin = origin;
+                float remaining = previewDistance;
+                Collider2D lastPassThrough = null;
+
+                // Bounded rather than "while true" — a handful of stacked one-way platforms is
+                // plenty, and this guarantees the cast can't loop forever on a degenerate setup.
+                for (int i = 0; i < 8 && remaining > 0.01f; i++)
+                {
+                    var hit = Physics2D.Raycast(castOrigin, AimDirection, remaining, _mask);
+                    if (hit.collider == null) break;
+
+                    if (OneWayPlatform.Blocks(hit))
+                    {
+                        end = hit.point;
+                        break;
+                    }
+
+                    if (hit.collider != lastPassThrough &&
+                        passThroughMarkers != null && markerCount < passThroughMarkers.Length)
+                    {
+                        ShowPassThroughMarker(markerCount++, hit.point);
+                        lastPassThrough = hit.collider;
+                    }
+
+                    // Step just past this collider and keep casting from there.
+                    float advanced = Vector2.Distance(castOrigin, hit.point) + 0.05f;
+                    castOrigin += AimDirection * advanced;
+                    remaining -= advanced;
+                }
             }
+
+            HidePassThroughMarkers(markerCount);
 
             trajectory.positionCount = 2;
             trajectory.SetPosition(0, origin);
             trajectory.SetPosition(1, end);
             trajectory.startColor = previewColor;
             trajectory.endColor = new Color(previewColor.r, previewColor.g, previewColor.b, 0f);
+        }
+
+        void ShowPassThroughMarker(int index, Vector2 pos)
+        {
+            if (passThroughMarkers == null || index >= passThroughMarkers.Length) return;
+            Transform m = passThroughMarkers[index];
+            if (m == null) return;
+            m.gameObject.SetActive(true);
+            m.position = pos;
+        }
+
+        void HidePassThroughMarkers(int fromIndex = 0)
+        {
+            if (passThroughMarkers == null) return;
+            for (int i = fromIndex; i < passThroughMarkers.Length; i++)
+                if (passThroughMarkers[i] != null) passThroughMarkers[i].gameObject.SetActive(false);
         }
 
         /// <summary>

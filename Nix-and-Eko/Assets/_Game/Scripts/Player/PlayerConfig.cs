@@ -90,6 +90,80 @@ namespace NixAndEko.Player
         [Tooltip("How long the player loses control after being hurt.")]
         public float hurtControlLock = 0.25f;
 
+        // ------------------------------------------------------------------ Jump physics locks
+        // For level design you often want to author "this gap needs exactly 6m of jump distance"
+        // rather than reverse-engineering it from gravity/recoil numbers. These fields (edited via
+        // the lock toggles in PlayerConfigEditor, not directly) pin a target and let
+        // ResolveJumpLocks() solve the one physics variable that keeps the formula true whenever
+        // anything else changes. Hidden from the default inspector — PlayerConfigEditor draws them
+        // next to the derived stat they govern instead.
+        [HideInInspector] public bool lockJumpHeight;
+        [HideInInspector] public float targetJumpHeight = 3f;
+        [HideInInspector] public bool lockAirTime;
+        [HideInInspector] public float targetAirTime = 0.6f;
+        [HideInInspector] public bool lockJumpDistance;
+        [HideInInspector] public float targetJumpDistance = 6f;
+
+        /// <summary>
+        /// Re-solve whichever physics variable each active lock governs, so its target keeps
+        /// holding after some other field changed:
+        /// <list type="bullet">
+        /// <item><see cref="lockJumpHeight"/> solves <see cref="gravityUp"/>.</item>
+        /// <item><see cref="lockAirTime"/> solves <see cref="gravityDown"/>.</item>
+        /// <item><see cref="lockJumpDistance"/> solves <see cref="moveSpeed"/>.</item>
+        /// </list>
+        /// Each lock owns a different variable, so all three can be active at once without
+        /// fighting each other. Order matters: distance depends on air time, which depends on
+        /// height, so they resolve in that order — height, then air time, then distance.
+        /// </summary>
+        public void ResolveJumpLocks()
+        {
+            if (lockJumpHeight)
+                gravityUp = SolveGravityForHeight(JumpLaunchSpeed, targetJumpHeight);
+
+            if (lockAirTime)
+            {
+                float upTime = JumpLaunchSpeed / Mathf.Max(0.01f, gravityUp);
+                float downTimeTarget = targetAirTime - upTime;
+                gravityDown = SolveGravityForFallTime(MaxJumpHeight, downTimeTarget, maxFallSpeed);
+            }
+
+            if (lockJumpDistance)
+                moveSpeed = targetJumpDistance / Mathf.Max(0.01f, MaxAirTime);
+        }
+
+        /// <summary>Gravity that gives a launch of <paramref name="launchSpeed"/> a peak height of exactly <paramref name="targetHeight"/> (H = v²/2g ⟹ g = v²/2H).</summary>
+        public static float SolveGravityForHeight(float launchSpeed, float targetHeight)
+        {
+            float h = Mathf.Max(0.01f, targetHeight);
+            return (launchSpeed * launchSpeed) / (2f * h);
+        }
+
+        /// <summary>
+        /// Gravity that makes a fall of <paramref name="height"/> take exactly
+        /// <paramref name="targetTime"/> seconds, respecting <paramref name="maxFallSpeed"/>.
+        /// <see cref="FallTime"/> is piecewise (it clamps at terminal velocity) but monotonically
+        /// decreasing in gravity, so this bisects instead of inverting each case by hand — no
+        /// fall can ever be faster than covering the whole height at <paramref name="maxFallSpeed"/>,
+        /// so a target below that floor is clamped up to it.
+        /// </summary>
+        public static float SolveGravityForFallTime(float height, float targetTime, float maxFallSpeed)
+        {
+            float h = Mathf.Max(0.001f, height);
+            float vMax = Mathf.Max(0.01f, maxFallSpeed);
+
+            float floor = h / vMax;   // fastest possible: falling the whole way at max speed
+            float t = Mathf.Max(targetTime, floor * 1.0001f);
+
+            float lo = 0.01f, hi = 100000f;
+            for (int i = 0; i < 60; i++)
+            {
+                float mid = (lo + hi) * 0.5f;
+                if (FallTime(h, mid, vMax) > t) lo = mid; else hi = mid;
+            }
+            return (lo + hi) * 0.5f;
+        }
+
         // ------------------------------------------------------------------ Derived "jump" stats
         // There's no button-jump any more: the closest thing to a jump is a full-charge shot
         // fired straight down (or down-left/down-right), which recoils the player upward at
@@ -114,7 +188,7 @@ namespace NixAndEko.Player
             get
             {
                 float upTime = JumpLaunchSpeed / Mathf.Max(0.01f, gravityUp);
-                return upTime + FallTime(MaxJumpHeight);
+                return upTime + FallTime(MaxJumpHeight, gravityDown, maxFallSpeed);
             }
         }
 
@@ -124,10 +198,15 @@ namespace NixAndEko.Player
         /// </summary>
         public float MaxJumpDistance => moveSpeed * MaxAirTime;
 
-        /// <summary>Seconds to fall <paramref name="height"/> under <see cref="gravityDown"/>, respecting <see cref="maxFallSpeed"/>.</summary>
-        float FallTime(float height)
+        /// <summary>
+        /// Seconds to fall <paramref name="height"/> under <paramref name="gravity"/>, respecting
+        /// <paramref name="maxFallSpeed"/>. Static (rather than reading gravityDown/maxFallSpeed
+        /// off this instance) so <see cref="SolveGravityForFallTime"/> can probe it against
+        /// candidate gravities without a live PlayerConfig to mutate.
+        /// </summary>
+        public static float FallTime(float height, float gravity, float maxFallSpeed)
         {
-            float gd = Mathf.Max(0.01f, gravityDown);
+            float gd = Mathf.Max(0.01f, gravity);
             float vMax = Mathf.Max(0.01f, maxFallSpeed);
             float distAtTerminal = (vMax * vMax) / (2f * gd);   // distance covered while still accelerating
 

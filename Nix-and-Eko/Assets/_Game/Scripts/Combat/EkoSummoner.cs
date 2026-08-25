@@ -5,9 +5,12 @@ namespace NixAndEko.Combat
 {
     /// <summary>
     /// Drives the Eko phantom from Nix's side: press the summon button (R2) while aiming to plant
-    /// an echo of Nix where she stands, hold to keep the phantom there, release to make them loose
-    /// their shot. Eko (a faerie, they/them) can be summoned even when Nix is out of arrows — the
-    /// reticle just greys out — since Eko fires their own arrow, not one of Nix's.
+    /// an echo of Nix where she stands. That same press doesn't loose the shot — R2 has to be
+    /// released and pressed again to fire, so simply holding the button down can't also fire it.
+    /// The phantom keeps charging the whole time they're standing there, release included, so a
+    /// longer wait before that second press still means a stronger shot. Eko (a faerie, they/them)
+    /// can be summoned even when Nix is out of arrows — the reticle just greys out — since Eko
+    /// fires their own arrow, not one of Nix's.
     ///
     /// Eko is a once-per-airtime resource, exactly like the mid-air bow shot: summoning spends
     /// the charge, and it only comes back by touching the ground. So a phantom planted in mid-air
@@ -60,17 +63,19 @@ namespace NixAndEko.Combat
                 return;
             }
 
-            if (input.EkoHeld)
-            {
-                // Eko holds their draw the whole time they're standing there, so a longer summon
-                // means a stronger shot — same draw curve as Nix's own bow.
-                _charge = Mathf.Clamp01(_charge + Time.deltaTime / Mathf.Max(0.01f, bow.drawTime));
-                eko.UpdatePreview();
-                return;
-            }
+            // The phantom keeps charging for as long as they're standing there — not just while
+            // R2 happens to be physically held down — so a longer wait before firing still means
+            // a stronger shot, same draw curve as Nix's own bow.
+            _charge = Mathf.Clamp01(_charge + Time.deltaTime / Mathf.Max(0.01f, bow.drawTime));
+            eko.UpdatePreview();
 
-            // Button released: the echo looses what they were holding, then fades. If Nix is
-            // sitting on the preview line, the shot homes in on her (aim assist).
+            // Firing needs a fresh press, not the one that summoned the phantom: EkoPressed only
+            // ever fires the frame after a release (Unity's WasPressedThisFrame), so this can
+            // never trigger off the same physical press as Summon() above — R2 has to go up and
+            // come back down again before the shot looses.
+            if (!input.EkoPressed) return;
+
+            // If Nix is sitting on the preview line, the shot homes in on her (aim assist).
             Transform homeTarget = PlayerOnPreviewLine() ? player.transform : null;
             eko.Loose(bow.ArrowSpeed(_charge), _charge, player.Col, homeTarget);
             eko.Dismiss();

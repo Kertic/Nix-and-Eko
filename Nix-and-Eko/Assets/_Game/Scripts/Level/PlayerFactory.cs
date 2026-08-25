@@ -63,6 +63,15 @@ namespace NixAndEko.Level
             var wind = go.AddComponent<WindStreaks>();
             wind.player = controller;
 
+            // Dense straight-line streaks flashed out during a bow burst's input-lock window.
+            var burst = go.AddComponent<BurstStreaks>();
+            burst.player = controller;
+
+            // Decides, each physics step, which one-way platforms are solid for her — so she can
+            // never snag on one's side or end up standing partway inside it.
+            var oneWay = go.AddComponent<OneWayPassenger>();
+            oneWay.player = controller;
+
             // Eko lives in world space (under the level root, not the player) so the phantom
             // stays frozen where it was planted while Nix flies off.
             Eko eko = BuildEko(parent, arrowTemplate);
@@ -145,7 +154,39 @@ namespace NixAndEko.Level
             anchorGo.SetActive(false);
             bow.dragAnchorIndicator = anchorGo.transform;
 
+            bow.passThroughMarkers = BuildPassThroughMarkers(bowGo.transform);
+
             return bow;
+        }
+
+        /// <summary>
+        /// Small dot markers a trajectory preview drops wherever it crosses clean through a
+        /// one-way platform instead of stopping there. Pre-built and toggled on/off each frame
+        /// rather than spawned per-crossing.
+        /// </summary>
+        static Transform[] BuildPassThroughMarkers(Transform parent, int count = 4)
+        {
+            var markers = new Transform[count];
+            for (int i = 0; i < count; i++)
+            {
+                var go = new GameObject("PassThroughMarker");
+                go.transform.SetParent(parent, false);
+                go.transform.localScale = Vector3.one * 0.35f;
+
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sortingOrder = 20;
+
+                var ps = go.AddComponent<ProceduralSprite>();
+                ps.shape = ProceduralSprite.Shape.Circle;
+                ps.primary = Palette.Yellow;
+                ps.circleThickness = 1f;   // filled dot, not a ring
+                ps.pixelsX = 10; ps.pixelsY = 10;
+                ps.Rebuild();
+
+                go.SetActive(false);
+                markers[i] = go.transform;
+            }
+            return markers;
         }
 
         /// <summary>
@@ -181,6 +222,7 @@ namespace NixAndEko.Level
             eko.sprite = sr;
             eko.trajectory = lr;
             eko.arrowPrefab = arrowTemplate;
+            eko.passThroughMarkers = BuildPassThroughMarkers(go.transform);
             return eko;
         }
 

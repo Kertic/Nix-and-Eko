@@ -12,21 +12,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8ed46ce3bfd1b52478a404143853d845, type: 3}
   m_Name: PlayerConfig
   m_EditorClassIdentifier: 
-  moveSpeed: 8
+  moveSpeed: 5.047777
   groundAccel: 90
   groundDecel: 100
   airAccel: 45
   crouchSpeedMultiplier: 0.45
-  gravityUp: 32
+  gravityUp: 49
   gravityDown: 42
   maxFallSpeed: 16
-  coyoteTime: 0.1
+  coyoteTime: 0.12
   jumpBuffer: 0.12
-  airDragDelay: 0.15
+  airDragDelay: 0.2
   glideDuration: 1.5
   glideGravity: 8
   wallSlideSpeed: 4
-  bowDrawTime: 0.2
+  bowDrawTime: 0
   arrowMinSpeed: 10
   arrowMaxSpeed: 34
   recoilMin: 4
@@ -40,3 +40,9 @@ MonoBehaviour:
   invulnTime: 0.8
   hurtKnockback: 12
   hurtControlLock: 0.25
+  lockJumpHeight: 1
+  targetJumpHeight: 2
+  lockAirTime: 0
+  targetAirTime: 0.6
+  lockJumpDistance: 1
+  targetJumpDistance: 3

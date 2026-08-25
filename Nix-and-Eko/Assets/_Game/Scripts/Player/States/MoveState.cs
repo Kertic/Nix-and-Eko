@@ -22,7 +22,10 @@ namespace NixAndEko.Player.States
             bool accelerating = Mathf.Abs(In.Move.x) > 0.2f;
             P.MoveHorizontal(target, accelerating ? Cfg.groundAccel : Cfg.groundDecel);
 
-            if (P.Velocity.y > 0f) P.Velocity = new Vector2(P.Velocity.x, 0f);
+            // Zero vertical velocity outright — see IdleState's FixedTick for why only clamping
+            // upward drift lets a one-way platform's soft landing contact leave a residual
+            // downward creep unopposed.
+            P.Velocity = new Vector2(P.Velocity.x, 0f);
         }
     }
 }

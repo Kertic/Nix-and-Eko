@@ -1,3 +1,5 @@
+using System.IO;
+using System.Linq;
 using NixAndEko.Level;
 using NixAndEko.Util;
 using UnityEditor;
@@ -9,6 +11,9 @@ namespace NixAndEko.EditorTools
     /// A scene-view level editor: pick a block type, drag rectangles in the Scene view to place
     /// them, click to select and edit, and rebuild the playable scene from the resulting
     /// <see cref="LevelData"/> asset. Levels stay as data, so they diff and merge cleanly.
+    /// Every <see cref="LevelData"/> asset under <see cref="LevelFolder"/> shows up in the
+    /// "Levels" list below, so switching between saved levels (or saving the current one under a
+    /// new name) never requires leaving the window to hunt through the Project browser.
     /// </summary>
     public class LevelEditorWindow : EditorWindow
     {
@@ -26,6 +31,12 @@ namespace NixAndEko.EditorTools
         Vector2 _dragStart;
         Vector2 _dragEnd;
 
+        /// <summary>Folder every saved level lives in — same place the default test level is created.</summary>
+        static string LevelFolder => Path.GetDirectoryName(TestLevelBuilder.LevelPath).Replace('\\', '/');
+
+        LevelData[] _library = new LevelData[0];
+        bool _showLibrary = true;
+
         [MenuItem("Tools/Nix & Eko/Level Editor", priority = 10)]
         public static void Open()
         {
@@ -39,6 +50,7 @@ namespace NixAndEko.EditorTools
             SceneView.duringSceneGui += OnSceneGUI;
             if (_level == null)
                 _level = AssetDatabase.LoadAssetAtPath<LevelData>(TestLevelBuilder.LevelPath);
+            RefreshLibrary();
         }
 
         void OnDisable() => SceneView.duringSceneGui -= OnSceneGUI;
@@ -48,12 +60,15 @@ namespace NixAndEko.EditorTools
         {
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
 
+            DrawLibrary();
+
+            EditorGUILayout.Space();
             EditorGUILayout.LabelField("Level Asset", EditorStyles.boldLabel);
             _level = (LevelData)EditorGUILayout.ObjectField(_level, typeof(LevelData), false);
 
             if (_level == null)
             {
-                EditorGUILayout.HelpBox("Assign a Level asset, or create one.", MessageType.Info);
+                EditorGUILayout.HelpBox("Assign a Level asset, pick one above, or create one.", MessageType.Info);
                 if (GUILayout.Button("Create New Level"))
                     CreateLevelAsset();
                 EditorGUILayout.EndScrollView();
@@ -112,6 +127,11 @@ namespace NixAndEko.EditorTools
                 if (GUILayout.Button("Rebuild Scene")) Rebuild();
                 if (GUILayout.Button("Frame Level")) FrameLevel();
             }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Save As...")) SaveLevelAs();
+                if (GUILayout.Button("Delete Level")) DeleteLevel();
+            }
             if (GUILayout.Button("Clear All Blocks") &&
                 EditorUtility.DisplayDialog("Clear level?",
                     "Remove all " + _level.blocks.Count + " blocks from " + _level.name + "?", "Clear", "Cancel"))
@@ -123,6 +143,127 @@ namespace NixAndEko.EditorTools
             }
 
             EditorGUILayout.EndScrollView();
+        }
+
+        // ------------------------------------------------------------------ level library (store / recall)
+
+        /// <summary>Every saved <see cref="LevelData"/> found under <see cref="LevelFolder"/>.</summary>
+        void DrawLibrary()
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                _showLibrary = EditorGUILayout.Foldout(_showLibrary, "Levels (" + _library.Length + ")", true);
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Refresh", GUILayout.Width(60f))) RefreshLibrary();
+            }
+            if (!_showLibrary) return;
+
+            if (_library.Length == 0)
+            {
+                EditorGUILayout.HelpBox("No saved levels in " + LevelFolder + " yet.", MessageType.None);
+                return;
+            }
+
+            foreach (LevelData lvl in _library)
+            {
+                if (lvl == null) continue;
+                bool isCurrent = lvl == _level;
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    GUI.enabled = !isCurrent;
+                    if (GUILayout.Button((isCurrent ? "> " : "   ") + lvl.name, EditorStyles.miniButton))
+                        LoadLevel(lvl);
+                    GUI.enabled = true;
+                    GUILayout.Label(lvl.blocks.Count + " blk", GUILayout.Width(44f));
+                }
+            }
+        }
+
+        /// <summary>Re-scan <see cref="LevelFolder"/> for level assets. Call after any save/delete.</summary>
+        void RefreshLibrary()
+        {
+            string folder = LevelFolder;
+            if (!AssetDatabase.IsValidFolder(folder))
+            {
+                _library = new LevelData[0];
+                return;
+            }
+
+            _library = AssetDatabase.FindAssets("t:" + nameof(LevelData), new[] { folder })
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Select(AssetDatabase.LoadAssetAtPath<LevelData>)
+                .Where(l => l != null)
+                .OrderBy(l => l.name)
+                .ToArray();
+        }
+
+        /// <summary>Recall a saved level: swap it in as the one being edited.</summary>
+        void LoadLevel(LevelData lvl)
+        {
+            _level = lvl;
+            _selected = -1;
+            Repaint();
+            SceneView.RepaintAll();
+        }
+
+        /// <summary>Store the level currently open under a new name, then switch to editing that copy.</summary>
+        void SaveLevelAs()
+        {
+            EnsureFolderExists(LevelFolder);
+
+            string path = EditorUtility.SaveFilePanelInProject(
+                "Save Level As", _level != null ? _level.name : "Level", "asset",
+                "Where should this copy be saved?", LevelFolder);
+            if (string.IsNullOrEmpty(path)) return;
+
+            var copy = CreateInstance<LevelData>();
+            if (_level != null)
+            {
+                copy.playerSpawn = _level.playerSpawn;
+                copy.killY = _level.killY;
+                copy.blocks = _level.blocks.Select(b => b.Clone()).ToList();
+            }
+
+            AssetDatabase.CreateAsset(copy, path);
+            AssetDatabase.SaveAssets();
+
+            _level = copy;
+            _selected = -1;
+            RefreshLibrary();
+            Debug.Log("[Level Editor] Saved '" + copy.name + "' to " + path);
+        }
+
+        /// <summary>Permanently remove the open level asset from disk, after confirming.</summary>
+        void DeleteLevel()
+        {
+            if (_level == null) return;
+
+            string path = AssetDatabase.GetAssetPath(_level);
+            if (!EditorUtility.DisplayDialog("Delete level?",
+                    "Permanently delete '" + _level.name + "' (" + path + ")? This cannot be undone.",
+                    "Delete", "Cancel"))
+                return;
+
+            AssetDatabase.DeleteAsset(path);
+            AssetDatabase.SaveAssets();
+
+            _level = null;
+            _selected = -1;
+            RefreshLibrary();
+            Repaint();
+        }
+
+        static void EnsureFolderExists(string folder)
+        {
+            if (AssetDatabase.IsValidFolder(folder)) return;
+
+            string parent = Path.GetDirectoryName(folder)?.Replace('\\', '/');
+            string leaf = Path.GetFileName(folder);
+            if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(leaf)) return;
+
+            if (!AssetDatabase.IsValidFolder(parent)) EnsureFolderExists(parent);
+            AssetDatabase.CreateFolder(parent, leaf);
         }
 
         void DrawSelectedBlockInspector()
@@ -179,7 +320,11 @@ namespace NixAndEko.EditorTools
                 {
                     Undo.RecordObject(_level, "Duplicate Block");
                     LevelBlock copy = blk.Clone();
-                    copy.position += new Vector2(blk.size.x + 1f, 0f);
+                    // Re-snap by corner after the offset — a size whose width isn't a whole
+                    // multiple of the grid (BreakableWall's default 1.2, or anything hand-resized)
+                    // would otherwise push the duplicate's edge off-grid even though the original
+                    // block was perfectly aligned.
+                    copy.position = SnapBlock(copy.position + new Vector2(blk.size.x + 1f, 0f), copy.size, copy.type);
                     _level.blocks.Add(copy);
                     _selected = _level.blocks.Count - 1;
                     Dirty();
@@ -282,11 +427,13 @@ namespace NixAndEko.EditorTools
             Vector2 max = Vector2.Max(_dragStart, _dragEnd);
             Vector2 size = max - min;
 
-            // A click (rather than a drag) places a default-sized block at the cursor.
+            // A click (rather than a drag) places a default-sized block at the cursor. Snap by
+            // edge (see SnapBlock) rather than just the click point, so the block's bounds line
+            // up with the grid the same way a dragged one, a moved one or a duplicate does.
             if (size.x < 0.25f || size.y < 0.25f)
             {
                 size = LevelData.DefaultSize(_paintType);
-                min = _dragStart - size * 0.5f;
+                min = SnapBlock(_dragStart, size, _paintType) - size * 0.5f;
             }
 
             var block = new LevelBlock
@@ -313,7 +460,7 @@ namespace NixAndEko.EditorTools
             if (EditorGUI.EndChangeCheck())
             {
                 Undo.RecordObject(_level, "Move Block");
-                blk.position = Snap(new Vector2(moved.x, moved.y));
+                blk.position = SnapBlock(new Vector2(moved.x, moved.y), blk.size, blk.type);
                 Dirty();
             }
         }
@@ -392,6 +539,54 @@ namespace NixAndEko.EditorTools
             return new Vector2(Mathf.Round(v.x / _grid) * _grid, Mathf.Round(v.y / _grid) * _grid);
         }
 
+        /// <summary>
+        /// Snap a block by one edge per axis rather than by its center, so that edge always lands
+        /// exactly on a grid line — for <i>any</i> size, not just ones that are a whole multiple of
+        /// the grid. That's what lets two differently-sized blocks share a flush surface: a Ground
+        /// block and a thin OneWay platform both anchor by their <i>top</i> edge (see
+        /// <see cref="VerticalAnchorFor"/>), so lining either of them up with a given height always
+        /// puts that same height under the player's feet, regardless of how tall each block
+        /// actually is. X always anchors by the left edge, for the same reason applied to
+        /// side-by-side placement. The trade-off: a block whose size isn't a grid multiple (a
+        /// 0.5-wide decoration on a grid of 1) won't show a "round" center position — but its edge
+        /// will always be exactly where the grid says, which is what actually matters for terrain
+        /// to line up.
+        /// </summary>
+        Vector2 SnapBlock(Vector2 center, Vector2 size, BlockType type)
+        {
+            bool topAnchor = VerticalAnchorFor(type) == VerticalAnchor.Top;
+            return new Vector2(
+                SnapEdge(center.x, size.x, fromMax: false),
+                SnapEdge(center.y, size.y, fromMax: topAnchor));
+        }
+
+        /// <summary>Snap the position of one axis so its min (or max) edge lands on the grid, then re-derive the center from that edge.</summary>
+        float SnapEdge(float v, float sizeOnAxis, bool fromMax)
+        {
+            if (_grid <= 0.001f) return v;
+
+            float half = sizeOnAxis * 0.5f;
+            float edge = fromMax ? v + half : v - half;
+            float snappedEdge = Mathf.Round(edge / _grid) * _grid;
+            return fromMax ? snappedEdge - half : snappedEdge + half;
+        }
+
+        enum VerticalAnchor { Bottom, Top }
+
+        /// <summary>
+        /// Which edge of a block type is its "resting" surface for grid-snap purposes. Floor-like
+        /// types anchor by their top (the surface something stands on) so they line up with each
+        /// other regardless of thickness; things that stand up from the floor anchor by their
+        /// bottom (the base that sits on the ground) instead.
+        /// </summary>
+        static VerticalAnchor VerticalAnchorFor(BlockType t) => t switch
+        {
+            BlockType.Ground => VerticalAnchor.Top,
+            BlockType.OneWay => VerticalAnchor.Top,
+            BlockType.MovingPlatform => VerticalAnchor.Top,
+            _ => VerticalAnchor.Bottom,   // Hazard, Checkpoint, Gate, TargetSwitch, BreakableWall
+        };
+
         int Pick(Vector2 world)
         {
             // Topmost (last drawn) block wins.
@@ -429,14 +624,17 @@ namespace NixAndEko.EditorTools
 
         void CreateLevelAsset()
         {
+            EnsureFolderExists(LevelFolder);
+
             string path = EditorUtility.SaveFilePanelInProject(
-                "Create Level", "Level", "asset", "Where should the level asset live?", "Assets/_Game/Data");
+                "Create Level", "Level", "asset", "Where should the level asset live?", LevelFolder);
             if (string.IsNullOrEmpty(path)) return;
 
             var level = CreateInstance<LevelData>();
             AssetDatabase.CreateAsset(level, path);
             AssetDatabase.SaveAssets();
             _level = level;
+            RefreshLibrary();
         }
     }
 }
