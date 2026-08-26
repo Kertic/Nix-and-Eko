@@ -1,4 +1,5 @@
 using NixAndEko.Combat;
+using NixAndEko.Util;
 using UnityEngine;
 
 namespace NixAndEko.Player.States
@@ -33,6 +34,9 @@ namespace NixAndEko.Player.States
             _lunged = false;
             P.MeleePose = _hit;
             P.FaceMoveInput();
+
+            // Swipe, thrust, overhead — the overhead reads heavier (lower pitch).
+            Sfx.Play(Sfx.Id.Melee, _hit == 2 ? 0.85f : 1f + _hit * 0.08f);
         }
 
         public override void Tick(float dt)

@@ -1,3 +1,4 @@
+using NixAndEko.Util;
 using UnityEngine;
 
 namespace NixAndEko.Player.States
@@ -11,6 +12,8 @@ namespace NixAndEko.Player.States
     public class JumpState : PlayerStateBase
     {
         public JumpState(PlayerController p) : base(p) { }
+
+        public override void Enter() => Sfx.Play(Sfx.Id.Jump);
 
         public override void Tick(float dt)
         {

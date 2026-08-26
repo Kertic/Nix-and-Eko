@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using NixAndEko.Core;
 using NixAndEko.Environment;
 using NixAndEko.Player.States;
+using NixAndEko.Util;
 using UnityEngine;
 
 namespace NixAndEko.Player
@@ -175,6 +176,9 @@ namespace NixAndEko.Player
         void Update()
         {
             Sense();
+            // Just touched down after a real airborne stretch (AirTimer is reset below in
+            // UpdateTimers, so it still holds last frame's airtime here). Skips the spawn frame.
+            if (Grounded && !WasGrounded && AirTimer > 0.08f) Sfx.Play(Sfx.Id.Land);
             UpdateTimers(Time.deltaTime);
             _machine.Tick(Time.deltaTime);
             currentState = _machine.Current?.GetType().Name;

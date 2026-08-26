@@ -36,6 +36,7 @@ namespace NixAndEko.Combat
             sr.sprite = SpriteFactory.SolidRect(Blue, 8, 8, Blue);
             sr.color = Blue;
             Particle.Burst(from, Blue, 8, 5f, 0.3f, 0.5f);
+            Sfx.Play(Sfx.Id.EkoZip, 1f, 0.7f);
             return go;
         }
 

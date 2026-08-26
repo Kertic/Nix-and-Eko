@@ -86,6 +86,7 @@ namespace NixAndEko.Combat
 
             Active = true;
             gameObject.SetActive(true);
+            Sfx.Play(Sfx.Id.EkoSpawn);
 
             if (prepared) UpdatePreview();
             else if (trajectory != null) { trajectory.positionCount = 0; HidePassThroughMarkers(); }

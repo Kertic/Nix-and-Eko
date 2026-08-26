@@ -1,5 +1,6 @@
 using NixAndEko.Environment;
 using NixAndEko.Player;
+using NixAndEko.Util;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -122,6 +123,10 @@ namespace NixAndEko.Combat
         void Update()
         {
             if (input == null) return;
+
+            // A blue arrow is Eko's — an in-air bonus that doesn't survive a landing. Touching the
+            // ground clears the blue slot (her own normal arrow is untouched).
+            if (player != null && player.Grounded) HasBlueArrow = false;
 
             IsAiming = input.AimStickActive || input.MouseAiming;
             AimDirection = ResolveAim();
@@ -355,6 +360,7 @@ namespace NixAndEko.Combat
             arrow.SetNixArrow(this, player != null ? player.Col : null, blue);
             arrow.Launch(aimDir * arrowSpeed, 1f);
             ApplyRecoil(aimDir, 1f);
+            Sfx.Play(Sfx.Id.Bow, blue ? 1.15f : 1f);
 
             if (blue)
             {

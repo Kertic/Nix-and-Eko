@@ -45,6 +45,7 @@ namespace NixAndEko.Combat
             Current = Mathf.Max(0, Current - amount);
             if (bar != null) bar.SetFraction(Current / (float)Mathf.Max(1, maxHealth));
             if (flash != null) flash.Flash();
+            Sfx.Play(Sfx.Id.EnemyHit);
 
             if (Current <= 0) Die();
         }

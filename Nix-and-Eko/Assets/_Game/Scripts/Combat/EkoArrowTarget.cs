@@ -38,6 +38,7 @@ namespace NixAndEko.Combat
             }
             if (player != null) player.RefillGlide();
             Particle.Burst(transform.position, burstColor, burstCount, burstSpeed);
+            Sfx.Play(Sfx.Id.EkoCatch);
             return false;
         }
     }
