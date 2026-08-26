@@ -23,7 +23,7 @@ namespace NixAndEko.Player
         [Tooltip("Horizontal speed multiplier while crouching.")]
         public float crouchSpeedMultiplier = 0.45f;
 
-        [Header("Jump (there's no button-jump — see the derived stats below)")]
+        [Header("Jump")]
         [Tooltip("Gravity while rising.")]
         public float gravityUp = 32f;
         [Tooltip("Gravity while falling (higher = snappier arc).")]
@@ -34,8 +34,8 @@ namespace NixAndEko.Player
                  "recoil, doesn't spend airtime ammo) — coyote time, but for the bow instead of " +
                  "a jump.")]
         public float coyoteTime = 0.1f;
-        [Tooltip("Seconds a Jump press is remembered before landing — only used by crouch + " +
-                 "jump to drop through one-way platforms, now that there's no button-jump.")]
+        [Tooltip("Seconds a Jump press is remembered before landing — covers both the button-jump " +
+                 "and crouch + jump to drop through one-way platforms.")]
         public float jumpBuffer = 0.12f;
         [Tooltip("Seconds after becoming airborne before natural air deceleration kicks in " +
                  "(outside glide) — lets a jump/launch keep its pop for a beat before drag " +
@@ -191,13 +191,13 @@ namespace NixAndEko.Player
         }
 
         // ------------------------------------------------------------------ Derived "jump" stats
-        // There's no button-jump any more: the closest thing to a jump is a full-charge shot
-        // fired straight down (or down-left/down-right), which recoils the player upward at
-        // recoilMax. These are read-only — tune recoilMax / gravityUp / gravityDown / moveSpeed
-        // instead — and are surfaced in the inspector (see PlayerConfigEditor) so the effect of
-        // those tweaks is visible at a glance.
+        // The button-jump (X / Space) shares its launch speed with the bow-recoil "jump" (a
+        // full-charge shot fired straight down), so both read as the same move. These are
+        // read-only — tune recoilMax / gravityUp / gravityDown / moveSpeed instead — and are
+        // surfaced in the inspector (see PlayerConfigEditor) so the effect of those tweaks is
+        // visible at a glance.
 
-        /// <summary>Initial upward speed of a full-charge downward shot (the "jump" launch speed).</summary>
+        /// <summary>Initial upward speed of a jump — button or bow-recoil, both share this.</summary>
         public float JumpLaunchSpeed => recoilMax;
 
         /// <summary>Peak height reached by a full-charge downward shot.</summary>

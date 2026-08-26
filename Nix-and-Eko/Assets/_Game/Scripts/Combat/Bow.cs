@@ -233,10 +233,12 @@ namespace NixAndEko.Combat
         }
 
         /// <summary>
-        /// Preview the arrow's parabolic arc, clipped at the first surface it would actually stop
-        /// at. Shown only while aiming with an arrow in hand. A one-way platform only clips the line
-        /// if the arc would hit its blocking face (<see cref="OneWayPlatform.Blocks"/>); a shot
-        /// arcing up through one from below gets a small marker dropped where it crosses instead.
+        /// Preview the arrow's straight flight path, clipped at the first surface it would stop
+        /// at — Nix's arrows now fly gravity-free (same as Eko's), so no arc simulation is needed:
+        /// a single raycast gives the exact line and the surface it stops on. A one-way platform
+        /// only clips the line if the shot would hit its blocking face
+        /// (<see cref="OneWayPlatform.Blocks"/>); a shot that would pass clean through gets a
+        /// small marker dropped where it crosses and the cast continues past it.
         /// </summary>
         void UpdateTrajectory()
         {
@@ -249,53 +251,49 @@ namespace NixAndEko.Combat
                 return;
             }
 
-            Vector2 p0 = Origin;
-            Vector2 v0 = AimDirection * arrowSpeed;
-            Vector2 accel = new Vector2(0f, Physics2D.gravity.y * _arrowGravity);
+            const float previewDistance = 40f;
+            Vector2 origin = Origin;
+            Vector2 end = origin + AimDirection * previewDistance;
             LayerMask mask = player != null ? player.groundMask : default;
-
-            trajectory.positionCount = trajectorySteps;
-            Vector2 prev = p0;
-            int count = 0;
             int markerCount = 0;
-            Collider2D lastPassThrough = null;
 
-            for (int i = 0; i < trajectorySteps; i++)
+            if (mask.value != 0)
             {
-                float t = i * trajectoryStep;
-                Vector2 pt = p0 + v0 * t + 0.5f * accel * (t * t);
+                Vector2 castOrigin = origin;
+                float remaining = previewDistance;
+                Collider2D lastPassThrough = null;
 
-                if (i > 0 && mask.value != 0)
+                // Bounded rather than "while true" — plenty for any stack of one-ways and a
+                // guarantee the cast can't loop forever on a degenerate setup.
+                for (int i = 0; i < 8 && remaining > 0.01f; i++)
                 {
-                    var hit = Physics2D.Linecast(prev, pt, mask);
-                    if (hit.collider != null)
-                    {
-                        if (OneWayPlatform.Blocks(hit))
-                        {
-                            trajectory.SetPosition(count++, hit.point);
-                            prev = pt;
-                            break;
-                        }
+                    var hit = Physics2D.Raycast(castOrigin, AimDirection, remaining, mask);
+                    if (hit.collider == null) break;
 
-                        if (hit.collider != lastPassThrough &&
-                            passThroughMarkers != null && markerCount < passThroughMarkers.Length)
-                        {
-                            ShowPassThroughMarker(markerCount++, hit.point);
-                            lastPassThrough = hit.collider;
-                        }
-                    }
-                    else
+                    if (OneWayPlatform.Blocks(hit))
                     {
-                        lastPassThrough = null;
+                        end = hit.point;
+                        break;
                     }
+
+                    if (hit.collider != lastPassThrough &&
+                        passThroughMarkers != null && markerCount < passThroughMarkers.Length)
+                    {
+                        ShowPassThroughMarker(markerCount++, hit.point);
+                        lastPassThrough = hit.collider;
+                    }
+
+                    float advanced = Vector2.Distance(castOrigin, hit.point) + 0.05f;
+                    castOrigin += AimDirection * advanced;
+                    remaining -= advanced;
                 }
-
-                trajectory.SetPosition(count++, pt);
-                prev = pt;
             }
 
-            trajectory.positionCount = count;
             HidePassThroughMarkers(markerCount);
+
+            trajectory.positionCount = 2;
+            trajectory.SetPosition(0, origin);
+            trajectory.SetPosition(1, end);
 
             Color c = FiresBlueNext ? blueColor : readyColor;
             trajectory.startColor = c;
@@ -357,6 +355,7 @@ namespace NixAndEko.Combat
             Arrow arrow = Instantiate(arrowPrefab, Origin, rot); // origin = player center, matches the arc preview
             arrow.gameObject.SetActive(true); // template may be inactive; copies must run
 
+            arrow.flyStraight = true;   // Nix's arrows now ignore gravity, just like Eko's.
             arrow.SetNixArrow(this, player != null ? player.Col : null, blue);
             arrow.Launch(aimDir * arrowSpeed, 1f);
             ApplyRecoil(aimDir, 1f);

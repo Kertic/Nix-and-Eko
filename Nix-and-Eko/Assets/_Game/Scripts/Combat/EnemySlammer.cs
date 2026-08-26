@@ -26,17 +26,23 @@ namespace NixAndEko.Combat
         Phase _phase = Phase.Rest;
         float _t;
         float _groundY;
+        EnemyHealth _health;
 
         void Start()
         {
             if (sprite == null) sprite = GetComponentInChildren<SpriteRenderer>();
+            _health = GetComponent<EnemyHealth>();
             _groundY = transform.position.y;
             SetSprite(EnemySprites.SlammerIdle);
         }
 
         void Update()
         {
-            _t += Time.deltaTime;
+            // Chill from a blue arrow scales the whole cycle — rest, wind-up, rise, hang, slam
+            // all stretch out — so a chilled slammer reads as visibly sluggish (and easier to
+            // avoid a slam from) rather than only its motion slowing.
+            float speedScale = _health != null ? _health.SpeedMultiplier : 1f;
+            _t += Time.deltaTime * speedScale;
             Vector3 p = transform.position;
 
             switch (_phase)

@@ -38,6 +38,50 @@ namespace NixAndEko.Player
         public PlayerConfig Config => config;
         public PlayerInputReader Input => input;
 
+        /// <summary>Fully suspend this controller — physics off, state machine idle. Nix uses this
+        /// while the player is possessing Eko (ghost mode): she stays put wherever she was, doesn't
+        /// tick states, doesn't collide with anything, and isn't sensed by anyone's physics queries.
+        /// <see cref="ForceGhostPose"/> handles the matching visual (crouch pose + translucency).</summary>
+        public bool Frozen { get; private set; }
+        /// <summary>Force the sprite to the Crouch pose regardless of the current locomotion state
+        /// — used by ghost-mode Nix, who shouldn't run her regular animator while frozen.</summary>
+        public bool ForceGhostPose;
+
+        /// <summary>Suspend/resume the state machine and zero velocity. The rigidbody stays
+        /// simulated (a planted Eko is still hit by arrows), but is switched to Kinematic while
+        /// frozen so an incoming impulse — an arrow crashing into a planted Eko, or an enemy
+        /// bumping into it — can't shove it off its held position. For Nix's ghost mode, use
+        /// <see cref="SetIntangible"/> alongside this to fully drop out of the simulation.
+        /// Reversible; safe to call twice.</summary>
+        public void SetFrozen(bool frozen)
+        {
+            if (Frozen == frozen) return;
+            Frozen = frozen;
+            if (Rb != null)
+            {
+                if (frozen)
+                {
+                    Rb.linearVelocity = Vector2.zero;
+                    Rb.angularVelocity = 0f;
+                    Rb.bodyType = RigidbodyType2D.Kinematic;   // impulses no longer move it
+                }
+                else
+                {
+                    Rb.bodyType = RigidbodyType2D.Dynamic;
+                    Rb.linearVelocity = Vector2.zero;   // wake up cleanly, not with any leftover
+                }
+            }
+            if (frozen) Grounded = false;   // sensed value would go stale; keep "no" while suspended
+        }
+
+        /// <summary>Take this rigidbody out of the physics simulation entirely (or bring it back).
+        /// While intangible, no other body collides with or is sensed by this one — used together
+        /// with <see cref="SetFrozen"/> for Nix's ghost mode during an Eko possession.</summary>
+        public void SetIntangible(bool intangible)
+        {
+            if (Rb != null) Rb.simulated = !intangible;
+        }
+
         // --- Sensing state ---
         public bool Grounded { get; private set; }
         public bool WasGrounded { get; private set; }
@@ -61,9 +105,9 @@ namespace NixAndEko.Player
         public int Facing { get; private set; } = 1;
 
         // --- Timers shared between states ---
-        /// <summary>Buffers a Jump press briefly so crouch + jump can drop through a one-way
-        /// platform even if the press lands a frame early. There's no button-jump any more —
-        /// this is the platform's only remaining consumer.</summary>
+        /// <summary>Buffers a Jump press briefly so it still lands a frame early — consumed by
+        /// the grounded button-jump (see <see cref="States.PlayerStateBase.TryButtonJump"/>) and by
+        /// crouch + jump dropping through a one-way platform.</summary>
         public float JumpBufferTimer;
         /// <summary>Seconds remaining before horizontal steering input is honored again. Used by
         /// bursts (recoil, dashes) so held input can't immediately cancel the kick out.</summary>
@@ -175,6 +219,7 @@ namespace NixAndEko.Player
 
         void Update()
         {
+            if (Frozen) { currentState = "Frozen"; return; }
             Sense();
             // Just touched down after a real airborne stretch (AirTimer is reset below in
             // UpdateTimers, so it still holds last frame's airtime here). Skips the spawn frame.
@@ -184,7 +229,11 @@ namespace NixAndEko.Player
             currentState = _machine.Current?.GetType().Name;
         }
 
-        void FixedUpdate() => _machine.FixedTick(Time.fixedDeltaTime);
+        void FixedUpdate()
+        {
+            if (Frozen) return;
+            _machine.FixedTick(Time.fixedDeltaTime);
+        }
 
         // ------------------------------------------------------------------ Sensing
         readonly List<Collider2D> _probeHits = new List<Collider2D>();

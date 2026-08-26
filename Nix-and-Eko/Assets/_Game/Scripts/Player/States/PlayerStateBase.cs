@@ -33,6 +33,23 @@ namespace NixAndEko.Player.States
             return false;
         }
 
+        /// <summary>
+        /// Grounded button-jump (X / Space) — launches straight up at <see cref="PlayerConfig.JumpLaunchSpeed"/>,
+        /// the same launch speed as the bow-recoil "jump" so the two feel identical. Buffered briefly
+        /// (see <see cref="PlayerController.JumpBufferTimer"/>) so a press that lands a frame early
+        /// still counts. No-ops during an input lock so a burst can't be cancelled by a stray buffered
+        /// press. Returns true if it changed state.
+        /// </summary>
+        protected bool TryButtonJump()
+        {
+            if (!P.Grounded || !P.BufferedJump || P.InputLockTimer > 0f) return false;
+
+            P.ConsumeJumpBuffer();
+            P.Velocity = new Vector2(P.Velocity.x, Cfg.JumpLaunchSpeed);
+            P.Machine.ChangeState(P.Jump);
+            return true;
+        }
+
         /// <summary>Are we pushing into a wall we're touching, while airborne?</summary>
         protected bool WantsWallSlide()
         {
