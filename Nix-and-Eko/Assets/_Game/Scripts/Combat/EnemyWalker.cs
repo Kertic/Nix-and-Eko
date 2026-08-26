@@ -24,16 +24,21 @@ namespace NixAndEko.Combat
         int _dir = 1;
         float _walkTimer;
         int _frame;
+        EnemyHealth _health;
 
         void Start()
         {
             if (sprite == null) sprite = GetComponentInChildren<SpriteRenderer>();
+            _health = GetComponent<EnemyHealth>();
             ApplyFacing();
         }
 
         void FixedUpdate()
         {
-            float dt = Time.fixedDeltaTime;
+            // Chill from a blue arrow slows the whole walker — move speed and the shuffle
+            // animation both — so a chilled patrol reads as sluggish, not just slower-to-turn.
+            float speedScale = _health != null ? _health.SpeedMultiplier : 1f;
+            float dt = Time.fixedDeltaTime * speedScale;
 
             // Look for a wall dead ahead, or a ledge (no ground just ahead of the leading foot).
             Vector2 center = transform.position;

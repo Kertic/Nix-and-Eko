@@ -36,6 +36,7 @@ namespace NixAndEko.Level
 
             int groundLayer = Mathf.Max(0, LayerMask.NameToLayer(groundLayerName));
             LevelBuilder.Build(level, transform, groundLayer);
+            BuildScenery();
 
             PlayerController player = null;
             if (spawnPlayer)
@@ -50,6 +51,15 @@ namespace NixAndEko.Level
             // Eko exists as a second PlayerController now (see PlayerFactory), so the camera needs
             // to be told explicitly who to follow rather than finding "the" PlayerController.
             if (configureCamera) ConfigureCamera(player);
+        }
+
+        /// <summary>Spawn the parallax faerie-forest backdrop (sky gradient, silhouette trees,
+        /// drifting fireflies). Parented under the loader so it retires with the level.</summary>
+        void BuildScenery()
+        {
+            var go = new GameObject("Scenery");
+            go.transform.SetParent(transform, false);
+            go.AddComponent<NixAndEko.Environment.Scenery>();
         }
 
         void AddDebugHud(PlayerController player)

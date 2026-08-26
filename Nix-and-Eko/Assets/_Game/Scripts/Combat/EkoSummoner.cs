@@ -48,6 +48,14 @@ namespace NixAndEko.Combat
         [Tooltip("How close Eko must walk to Nix's downed arrow to pick it up.")]
         public float grabRadius = 0.8f;
 
+        [Header("Auto-aim (Eko's shot homes on Nix if she's on its preview line)")]
+        [Tooltip("How close (perpendicular, world units) Nix must be to Eko's preview line at " +
+                 "release for the shot to home in on her.")]
+        public float assistRadius = 1.25f;
+        [Tooltip("Nix must be at least this far ahead of Eko along the line for a homing shot — " +
+                 "keeps a point-blank fire from auto-catching before the arrow even reads as launched.")]
+        public float assistMinDistance = 1.5f;
+
         [Header("Fetch (R2 with no arrow)")]
         [Tooltip("Seconds the fetch orb takes for each leg (Eko/phantom -> arrow, then arrow -> " +
                  "Nix) — fixed regardless of distance, so a far-off arrow doesn't take forever.")]
@@ -70,6 +78,7 @@ namespace NixAndEko.Combat
         CameraFollow _camera;
         Color _nixOriginalColor;
         bool _nixColorCached;
+        Collider2D _ekoCol;
 
         void Awake()
         {
@@ -79,12 +88,21 @@ namespace NixAndEko.Combat
             if (nixHealth == null && player != null) nixHealth = player.GetComponent<Health>();
             if (nixSprite == null && player != null && player.spriteRoot != null)
                 nixSprite = player.spriteRoot.GetComponent<SpriteRenderer>();
+            if (_ekoCol == null && ekoPlayer != null) _ekoCol = ekoPlayer.GetComponent<Collider2D>();
         }
 
         void Update()
         {
             if (input == null || bow == null || eko == null || player == null ||
                 ekoPlayer == null || ekoInput == null) return;
+
+            // Nix and the phantom must never physically shove each other. The pair was set at
+            // build time, but Unity clears Physics2D.IgnoreCollision pairs on some transitions
+            // (Rb.simulated toggles for ghost mode, bodyType flips on Kinematic freeze, and any
+            // collider that goes disabled/enabled), and every one of those happens across a
+            // possession cycle. Re-asserting here is O(1) and immune to which of the two bodies
+            // was the last to change state.
+            EnsureNoCollisionBetweenNixAndEko();
 
             // Ghost-mode Nix reports Grounded = false (physics is suspended); still, once she's
             // back in control and touches ground, the summon recharges.
@@ -101,11 +119,13 @@ namespace NixAndEko.Combat
         // ------------------------------------------------------------------ Nix-side input
         void UpdateWhileNixControlled()
         {
-            // R2 with no arrow in hand always sends Eko out to fetch, regardless of what Eko is
-            // doing right now — a planted phantom vanishes on the spot so the fetch orb can leave
-            // from where it stood; a dormant Eko sends the orb from Nix. Bow.Update already only
-            // fires on R2 when Nix has an arrow, so this branch is unambiguous.
-            if (input.NixBowPressed && !bow.HasAnyArrow && !_fetching)
+            // R2 with no arrow in hand sends Eko out to fetch, regardless of what Eko is doing —
+            // a planted phantom vanishes on the spot so the fetch orb can leave from where it
+            // stood; a dormant Eko sends the orb from Nix. Grounded-only (coyote counts): a
+            // desperate airborne R2 can't summon a fetch, since the whole return loop is meant
+            // to close on Nix's feet. Bow.Update already only fires R2 when Nix has an arrow, so
+            // this branch is unambiguous.
+            if (input.NixBowPressed && !bow.HasAnyArrow && !_fetching && player.GroundedForRecoil)
             {
                 TryStartFetch();
                 return;
@@ -115,8 +135,12 @@ namespace NixAndEko.Combat
 
             if (eko.Active && eko.Frozen)
             {
-                // Planted phantom out and Nix pressed L1 — fire it (or dismiss cleanly if no aim was set).
-                FireOrReturnPhantom();
+                // Planted phantom out and Nix pressed L1 — fire it. The phantom always has a
+                // valid held aim (defaults to Eko's facing on summon, updates whenever the player
+                // aims during the possession), so this is unconditional now: previously a "never
+                // aimed → dismiss without firing" branch made it look like L1 was doing nothing,
+                // which is the opposite of what a player pressing L1 on a planted phantom expects.
+                FirePhantom();
                 return;
             }
 
@@ -124,44 +148,97 @@ namespace NixAndEko.Combat
         }
 
         /// <summary>Kick off the fetch orb. Bails silently if there's no downed arrow to grab
-        /// (Nix must be genuinely empty, not just aiming empty-handed at nothing).</summary>
+        /// (Nix must be genuinely empty, not just aiming empty-handed at nothing). If a planted
+        /// phantom is out, the phantom is snapshotted and vanishes; the orb takes three legs
+        /// (phantom → arrow → Nix → phantom's old spot) and Eko reforms in the same setup at the
+        /// end, so a fetch mid-setup doesn't cost you the aim you'd lined up.</summary>
         void TryStartFetch()
         {
             Arrow arrow = bow.LastFiredArrow;
             if (arrow == null) return;
 
-            // A planted phantom vanishes on the spot and the orb leaves from where it stood — the
-            // vanish burst doubles as the "orb is separating" beat. If Eko was dormant, the orb
-            // just sets off from Nix.
-            Vector3 from = player.transform.position;
-            if (eko.Active)
+            if (eko.Active && eko.Frozen)
             {
-                from = eko.transform.position;
+                // Snapshot the phantom, vanish it (the burst doubles as the orb-separating beat),
+                // and fire the three-leg fetch that reforms it at the end.
+                Vector3 spot = eko.transform.position;
+                int facing = ekoPlayer.Facing;
+                Vector2 aim = eko.AimDirection;
+                bool hadAim = eko.HasAim;
                 eko.Vanish();
+                StartFetchAndReformPhantom(spot, arrow, spot, facing, aim, hadAim);
+                return;
             }
 
-            StartFetch(from, arrow);
+            // Dormant Eko: plain two-leg fetch that leaves from Nix.
+            StartFetch(player.transform.position, arrow);
         }
 
-        /// <summary>Orb out from <paramref name="from"/> to the downed arrow (homing on its live
-        /// visual centre so it always makes contact), grab it, then orb back to hand it to Nix.
-        /// Each leg takes a fixed <see cref="fetchLegDuration"/> regardless of distance.</summary>
+        /// <summary>Two-leg orb fetch — out from <paramref name="from"/> to the downed arrow
+        /// (homing on its live visual centre so it always makes contact), then back to Nix. Each
+        /// leg takes a fixed <see cref="fetchLegDuration"/> regardless of distance.</summary>
         void StartFetch(Vector3 from, Arrow arrow)
         {
             _fetching = true;
             bool wasBlue = arrow.blue;
+            bool grabbed = false;   // did we actually take an arrow off the ground?
 
             EkoOrb.Chase(from, () => ArrowCenter(arrow), fetchLegDuration, onArrive: () =>
             {
                 Vector3 grabAt = arrow != null ? ArrowCenter(arrow) : player.transform.position;
-                if (arrow != null) Destroy(arrow.gameObject);
+                if (arrow != null) { grabbed = true; Destroy(arrow.gameObject); }
 
                 EkoOrb.Chase(grabAt, () => player.transform.position, fetchLegDuration, onArrive: () =>
                 {
-                    bow.GiveArrow(wasBlue);
+                    // Only grant an arrow if we actually collected one — otherwise Nix reclaimed
+                    // it via walk-over mid-fetch and this second GiveArrow would duplicate the
+                    // stock (letting her fire a fresh arrow while the previous one is still in
+                    // the world). Handles the timing race between TryReclaim and this callback.
+                    if (grabbed) bow.GiveArrow(wasBlue);
                     _fetching = false;
                 });
             });
+        }
+
+        /// <summary>Three-leg fetch that reforms the phantom at <paramref name="reformAt"/> with
+        /// the snapshotted aim after handing the arrow back — the fetch borrows Eko without
+        /// dismantling a setup shot. Legs: <paramref name="from"/> → arrow → Nix → reformAt.</summary>
+        void StartFetchAndReformPhantom(Vector3 from, Arrow arrow, Vector3 reformAt,
+                                        int facing, Vector2 aim, bool hadAim)
+        {
+            _fetching = true;
+            bool wasBlue = arrow.blue;
+            bool grabbed = false;
+
+            EkoOrb.Chase(from, () => ArrowCenter(arrow), fetchLegDuration, onArrive: () =>
+            {
+                Vector3 grabAt = arrow != null ? ArrowCenter(arrow) : player.transform.position;
+                if (arrow != null) { grabbed = true; Destroy(arrow.gameObject); }
+
+                EkoOrb.Chase(grabAt, () => player.transform.position, fetchLegDuration, onArrive: () =>
+                {
+                    // See StartFetch: only grant an arrow if we actually collected one, so a
+                    // walk-over reclaim that raced this fetch can't double up Nix's stock.
+                    if (grabbed) bow.GiveArrow(wasBlue);
+
+                    EkoOrb.Chase(player.transform.position, () => reformAt, fetchLegDuration, onArrive: () =>
+                    {
+                        ReformPlantedPhantom(reformAt, facing, aim, hadAim);
+                        _fetching = false;
+                    });
+                });
+            });
+        }
+
+        /// <summary>Re-materialise the phantom exactly where it was before a fetch trip, holding
+        /// the aim it had. Bypasses <see cref="BeginPossession"/> — this isn't a fresh summon and
+        /// mustn't spend a summon charge or hand control to Eko, only restore the planted state.</summary>
+        void ReformPlantedPhantom(Vector3 pos, int facing, Vector2 aim, bool hadAim)
+        {
+            eko.Summon(pos, facing, player.groundMask);
+            SnapEkoBody(pos, facing);
+            eko.OverrideAim(aim, hadAim);
+            eko.FreezeInPlace();
         }
 
         // ------------------------------------------------------------------ Eko-side input
@@ -238,8 +315,24 @@ namespace NixAndEko.Combat
 
         void FirePhantom()
         {
-            eko.Loose(bow.ArrowSpeed(), player.Col);
+            Transform homeTarget = PlayerOnPreviewLine() ? player.transform : null;
+            eko.Loose(bow.ArrowSpeed(), player.Col, homeTarget);
             eko.DismissWithOrb();
+        }
+
+        /// <summary>Is Nix close enough to Eko's straight preview line — ahead of the phantom and
+        /// within <see cref="assistRadius"/> of the line — to earn a homing shot?</summary>
+        bool PlayerOnPreviewLine()
+        {
+            Vector2 origin = eko.transform.position;
+            Vector2 dir = eko.AimDirection;
+            Vector2 toPlayer = (Vector2)player.transform.position - origin;
+
+            float along = Vector2.Dot(toPlayer, dir);
+            if (along < assistMinDistance || along > eko.previewDistance) return false;
+
+            Vector2 perp = toPlayer - dir * along;
+            return perp.magnitude <= assistRadius;
         }
 
         // ------------------------------------------------------------------ Nix ghost mode
@@ -247,6 +340,7 @@ namespace NixAndEko.Combat
         {
             player.ForceGhostPose = true;
             player.SetFrozen(true);
+            player.SetIntangible(true);   // ghost Nix: nothing collides with her, nothing senses her
             if (nixSprite != null)
             {
                 if (!_nixColorCached) { _nixOriginalColor = nixSprite.color; _nixColorCached = true; }
@@ -258,6 +352,7 @@ namespace NixAndEko.Combat
 
         void ExitGhostMode()
         {
+            player.SetIntangible(false);
             player.SetFrozen(false);
             player.ForceGhostPose = false;
             if (nixSprite != null && _nixColorCached) nixSprite.color = _nixOriginalColor;
@@ -306,6 +401,15 @@ namespace NixAndEko.Combat
             if (arrow == null) return Vector3.zero;
             var sr = arrow.GetComponentInChildren<SpriteRenderer>();
             return sr != null ? sr.bounds.center : arrow.transform.position;
+        }
+
+        void EnsureNoCollisionBetweenNixAndEko()
+        {
+            if (_ekoCol == null && ekoPlayer != null) _ekoCol = ekoPlayer.GetComponent<Collider2D>();
+            if (player == null || player.Col == null || _ekoCol == null) return;
+            // Physics2D.IgnoreCollision is a per-pair write and Unity has no cheap "is this pair
+            // ignored?" query — just re-assert. The internal cost is a small hash lookup.
+            Physics2D.IgnoreCollision(player.Col, _ekoCol, true);
         }
 
         /// <summary>Point the main camera at whoever's being controlled. Looked up lazily (and

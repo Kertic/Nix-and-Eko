@@ -23,7 +23,8 @@ namespace NixAndEko.Combat
         [Range(0f, 1f)] public float charge;
 
         [Header("Eko")]
-        [Tooltip("Ignore gravity and fly dead straight. Eko's arrows do this; Nix's arc.")]
+        [Tooltip("Ignore gravity and fly dead straight — every arrow does this now (Nix's too), " +
+                 "kept as an explicit flag so a future gravity-arc arrow can opt out.")]
         public bool flyStraight;
         [Tooltip("Fired by Eko — catching Nix with it reloads her air shot instead of doing nothing.")]
         public bool isEkoArrow;
@@ -43,6 +44,10 @@ namespace NixAndEko.Combat
         [Tooltip("Max seconds a homing arrow chases before giving up and despawning, so a shot " +
                  "that can't connect doesn't orbit forever.")]
         public float homingLifetime = 2.5f;
+
+        /// <summary>True once this arrow has stuck as a walk-over pickup (Nix's own, non-blue,
+        /// landed). EkoSummoner reads this to decide when the auto-fetch is eligible.</summary>
+        public bool IsPickup => _isPickup;
 
         Rigidbody2D _rb;
         Collider2D _col;
@@ -297,6 +302,22 @@ namespace NixAndEko.Combat
             if (_homingTarget != null &&
                 other.transform != _homingTarget && !other.transform.IsChildOf(_homingTarget))
                 return;
+
+            // One of Nix's own arrows striking the planted Eko phantom swaps their places — Eko's
+            // own arrows never do (isEkoArrow). Only fires on a frozen (planted-and-waiting)
+            // phantom; a live, player-driven Eko is not a swap target. The arrow drops as a pickup
+            // at the impact point, which (after the swap) is exactly where Nix lands, so she can
+            // grab it right back.
+            if (!isEkoArrow)
+            {
+                var eko = other.GetComponentInParent<Eko>();
+                if (eko != null && eko.Active && eko.Frozen)
+                {
+                    eko.OnNixArrowHit();
+                    Stick(transform);   // Nix arrow → becomes a pickup where it struck
+                    return;
+                }
+            }
 
             // Give the struck object a chance to react (and to reject sticking). Nix's single arrow
             // still triggers a "consume" target (switch, breakable, enemy) but is never destroyed by

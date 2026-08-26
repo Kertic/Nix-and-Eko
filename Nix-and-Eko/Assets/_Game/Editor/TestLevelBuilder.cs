@@ -140,6 +140,13 @@ namespace NixAndEko.EditorTools
 
             LevelBuilder.Build(level, root.transform, groundLayer);
 
+            // Faerie-forest backdrop — sky gradient + silhouette trees + drifting fireflies.
+            // Scenery's own Start() builds its child assets at runtime, so nothing gets baked in
+            // the scene: recolouring the palette and re-running Play is enough to iterate.
+            var sceneryGo = new GameObject("Scenery");
+            sceneryGo.transform.SetParent(root.transform, false);
+            sceneryGo.AddComponent<NixAndEko.Environment.Scenery>();
+
             Arrow arrow = PlayerFactory.BuildArrowTemplate(root.transform);
             PlayerController player = PlayerFactory.Build(config, inputAsset, groundLayer, arrow,
                                                           level.playerSpawn, root.transform, level.killY);

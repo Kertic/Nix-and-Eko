@@ -146,6 +146,20 @@ namespace NixAndEko.Combat
             if (sprite != null) sprite.color = frozenTint;
         }
 
+        /// <summary>Overwrite the held aim directly — used when reforming a planted phantom after
+        /// a fetch trip, so the aim it had before the trip is exactly what it holds after.
+        /// Updates the sticky 8-way sector so a later un-freeze into live control won't jitter.</summary>
+        public void OverrideAim(Vector2 dir, bool hasAim)
+        {
+            if (dir.sqrMagnitude > 0.0001f) AimDirection = dir.normalized;
+            HasAim = hasAim;
+
+            // Sync the sector so live aim (if the phantom is possessed again later) picks up here.
+            float angle = Mathf.Atan2(AimDirection.y, AimDirection.x) * Mathf.Rad2Deg;
+            int nearest = Mathf.RoundToInt(angle / 45f);
+            _aimSector = ((nearest % 8) + 8) % 8;
+        }
+
         /// <summary>Dismiss with no visual effect. Used after Vanish / DismissWithOrb / Loose have
         /// already fired whatever they need — this just retires the GameObject cleanly.</summary>
         public void Dismiss()
@@ -356,8 +370,10 @@ namespace NixAndEko.Combat
         /// <summary>Loose the held shot along the current aim. <paramref name="nixCol"/> is Nix's
         /// collider, registered as the arrow's catch target so the shot can find her without
         /// physically shoving her — the momentum boost is applied deliberately on catch (see
-        /// <see cref="EkoArrowTarget"/>). Straight, gravity-free, spawn cleared to Eko's body.</summary>
-        public Arrow Loose(float speed, Collider2D nixCol)
+        /// <see cref="EkoArrowTarget"/>). Straight and gravity-free by default; when
+        /// <paramref name="homeTarget"/> is set (auto-aim — Nix was on the preview line at release),
+        /// the arrow curves to her and phases through everything else so it always lands.</summary>
+        public Arrow Loose(float speed, Collider2D nixCol, Transform homeTarget = null)
         {
             if (arrowPrefab == null)
             {
@@ -374,11 +390,35 @@ namespace NixAndEko.Combat
             arrow.blue = true;                // Eko's arrows read blue
             arrow.ekoAim = AimDirection;
             arrow.SetCatchTarget(nixCol);
+            if (homeTarget != null) arrow.HomeTo(homeTarget);
             arrow.Launch(AimDirection * speed, 1f);
-
-            // A tiny hitstop on release adds weight to the shot going off — a swap-style beat.
-            Hitstop.Freeze(CatchHitstop);
             return arrow;
+        }
+
+        /// <summary>Nix's own arrow struck the planted phantom: freeze-frame, swap Nix and Eko's
+        /// positions with a blue-orb zip at each end. The phantom stays planted (now where Nix was)
+        /// so a setup Eko survives the swap — its held aim is preserved. Only fires on a frozen
+        /// (planted-and-waiting) phantom; a live, player-driven Eko can't be swap-teleported.</summary>
+        public void OnNixArrowHit()
+        {
+            if (!Active || !Frozen || player == null || ekoPlayer == null) return;
+
+            Vector3 nixPos = player.transform.position;
+            Vector3 ekoPos = transform.position;
+
+            Hitstop.Freeze(CatchHitstop);
+
+            // Move Nix onto Eko's spot at a dead stop, and move Eko (still frozen — SetFrozen keeps
+            // its rigidbody suspended, so ekoPlayer.Rb.position must be written along with the
+            // transform for the interpolated body to actually relocate) onto Nix's old spot.
+            player.transform.position = ekoPos;
+            player.Velocity = Vector2.zero;
+            transform.position = nixPos;
+            if (ekoPlayer.Rb != null) ekoPlayer.Rb.position = nixPos;
+
+            // Two orbs crossing: Nix's trail into Eko's old spot, Eko's into Nix's old spot.
+            EkoOrb.Fly(nixPos, ekoPos, 0.16f);
+            EkoOrb.Fly(ekoPos, nixPos, 0.16f);
         }
     }
 }

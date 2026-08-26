@@ -47,21 +47,39 @@ namespace NixAndEko.Player
         /// — used by ghost-mode Nix, who shouldn't run her regular animator while frozen.</summary>
         public bool ForceGhostPose;
 
-        /// <summary>Enter/leave the ghost-frozen suspend. Zeroes velocity, kills physics interaction
-        /// (colliders included) and stops the state machine ticking. Reversible; safe to call twice.</summary>
+        /// <summary>Suspend/resume the state machine and zero velocity. The rigidbody stays
+        /// simulated (a planted Eko is still hit by arrows), but is switched to Kinematic while
+        /// frozen so an incoming impulse — an arrow crashing into a planted Eko, or an enemy
+        /// bumping into it — can't shove it off its held position. For Nix's ghost mode, use
+        /// <see cref="SetIntangible"/> alongside this to fully drop out of the simulation.
+        /// Reversible; safe to call twice.</summary>
         public void SetFrozen(bool frozen)
         {
             if (Frozen == frozen) return;
             Frozen = frozen;
-            if (frozen)
+            if (Rb != null)
             {
-                if (Rb != null) { Rb.linearVelocity = Vector2.zero; Rb.simulated = false; }
-                Grounded = false;   // sensed value would go stale; keep "unknown/no" while suspended
+                if (frozen)
+                {
+                    Rb.linearVelocity = Vector2.zero;
+                    Rb.angularVelocity = 0f;
+                    Rb.bodyType = RigidbodyType2D.Kinematic;   // impulses no longer move it
+                }
+                else
+                {
+                    Rb.bodyType = RigidbodyType2D.Dynamic;
+                    Rb.linearVelocity = Vector2.zero;   // wake up cleanly, not with any leftover
+                }
             }
-            else
-            {
-                if (Rb != null) Rb.simulated = true;
-            }
+            if (frozen) Grounded = false;   // sensed value would go stale; keep "no" while suspended
+        }
+
+        /// <summary>Take this rigidbody out of the physics simulation entirely (or bring it back).
+        /// While intangible, no other body collides with or is sensed by this one — used together
+        /// with <see cref="SetFrozen"/> for Nix's ghost mode during an Eko possession.</summary>
+        public void SetIntangible(bool intangible)
+        {
+            if (Rb != null) Rb.simulated = !intangible;
         }
 
         // --- Sensing state ---
