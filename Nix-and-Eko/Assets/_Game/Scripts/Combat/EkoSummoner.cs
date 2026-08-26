@@ -39,10 +39,9 @@ namespace NixAndEko.Combat
         public float assistMinDistance = 1.5f;
 
         [Header("Fetch")]
-        [Tooltip("Speed (units/sec) the fetch orb zips out to the arrow and back.")]
-        public float fetchSpeed = 26f;
-        [Tooltip("How close (world units) the orb must get to the arrow's centre before it grabs it.")]
-        public float fetchArrive = 0.2f;
+        [Tooltip("Seconds the fetch orb takes for each leg (Eko -> arrow, then arrow -> Nix) — fixed " +
+                 "regardless of distance, so a far-off arrow doesn't take forever to retrieve.")]
+        public float fetchLegDuration = 0.35f;
         [Tooltip("Hold the Nix Bow button this long, while a phantom is out and Nix is empty, to " +
                  "force the phantom home and fetch the arrow anyway (a QOL 'L1 then R2' shortcut).")]
         public float fetchChargeTime = 0.6f;
@@ -194,20 +193,21 @@ namespace NixAndEko.Combat
         /// <summary>
         /// Orb out from <paramref name="from"/> to the downed arrow — homing onto its live visual
         /// centre so it always makes contact instead of stopping short at the nock-pivoted transform
-        /// — grab it, then orb back to hand it over to Nix.
+        /// — grab it, then orb back to hand it over to Nix. Each leg takes a fixed
+        /// <see cref="fetchLegDuration"/> regardless of how far away the arrow landed.
         /// </summary>
         void StartFetch(Vector3 from, Arrow arrow)
         {
             _fetching = true;
             bool wasBlue = arrow.blue;
 
-            EkoOrb.Chase(from, () => ArrowCenter(arrow), fetchSpeed, fetchArrive,
+            EkoOrb.Chase(from, () => ArrowCenter(arrow), fetchLegDuration,
                 onArrive: () =>
             {
                 Vector3 grabAt = arrow != null ? ArrowCenter(arrow) : player.transform.position;
                 if (arrow != null) Destroy(arrow.gameObject);
 
-                EkoOrb.Chase(grabAt, () => player.transform.position, fetchSpeed, fetchArrive,
+                EkoOrb.Chase(grabAt, () => player.transform.position, fetchLegDuration,
                     onArrive: () =>
                 {
                     bow.GiveArrow(wasBlue);

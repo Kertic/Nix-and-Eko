@@ -20,10 +20,12 @@ namespace NixAndEko.Combat
         Action _onArrive;
         bool _burstOnArrive;
 
-        // Chase mode: home onto a live target until within arrival distance.
+        // Chase mode: home onto a live target over a fixed duration, regardless of distance — a
+        // far target doesn't take forever and a near one doesn't snap instantly. Each frame it's
+        // eased toward wherever the target currently is, so at t=1 it's exactly on it (a moving
+        // target — Nix on the return leg — still gets a smooth, guaranteed-arrival curve).
         bool _chase;
         Func<Vector3> _target;
-        float _speed, _arrive, _timeout;
 
         static GameObject NewOrb(Vector3 from)
         {
@@ -56,22 +58,22 @@ namespace NixAndEko.Combat
         }
 
         /// <summary>
-        /// Spawn an orb that homes onto a <em>live</em> target (re-read each frame) at
-        /// <paramref name="speed"/> units/sec and fires <paramref name="onArrive"/> only once it's
-        /// within <paramref name="arriveDist"/> of it — so a fetch always actually reaches the arrow's
-        /// centre before grabbing it, never stopping short. A timeout guarantees it still completes.
+        /// Spawn an orb that homes onto a <em>live</em> target (re-read each frame) over a fixed
+        /// <paramref name="duration"/> — a distance-independent travel time, so a far arrow doesn't
+        /// take forever and a near one doesn't arrive instantly. Guaranteed to land exactly on the
+        /// target when it fires <paramref name="onArrive"/>, even if the target moves meanwhile (the
+        /// return leg homes on Nix).
         /// </summary>
-        public static EkoOrb Chase(Vector3 from, Func<Vector3> target, float speed = 24f,
-                                   float arriveDist = 0.2f, float timeout = 3f, Action onArrive = null)
+        public static EkoOrb Chase(Vector3 from, Func<Vector3> target, float duration = 0.35f,
+                                   Action onArrive = null)
         {
             var go = NewOrb(from);
             var orb = go.AddComponent<EkoOrb>();
             orb._sr = go.GetComponent<SpriteRenderer>();
             orb._chase = true;
+            orb._from = from;
             orb._target = target;
-            orb._speed = Mathf.Max(0.1f, speed);
-            orb._arrive = Mathf.Max(0.02f, arriveDist);
-            orb._timeout = Mathf.Max(0.1f, timeout);
+            orb._dur = Mathf.Max(0.01f, duration);
             orb._onArrive = onArrive;
             orb._burstOnArrive = true;
             return orb;
@@ -80,20 +82,22 @@ namespace NixAndEko.Combat
         void Update()
         {
             float dt = Time.unscaledDeltaTime;
+            _age += dt;
 
             if (_chase)
             {
-                _age += dt;
                 Vector3 goal = _target != null ? _target() : transform.position;
-                transform.position = Vector3.MoveTowards(transform.position, goal, _speed * dt);
+                float ct = Mathf.Clamp01(_age / _dur);
+                float ce = ct * ct * (3f - 2f * ct);
+                // Re-aimed at the live target every frame: remaining distance shrinks to zero by
+                // t=1 regardless of how far it started, and a moving target still gets hit exactly.
+                transform.position = Vector3.Lerp(_from, goal, ce);
                 transform.localScale = Vector3.one * (0.45f + 0.1f * Mathf.Sin(Time.unscaledTime * 20f));
 
-                if (Vector3.Distance(transform.position, goal) <= _arrive || _age >= _timeout)
-                    Arrive(transform.position);
+                if (ct >= 1f) Arrive(goal);
                 return;
             }
 
-            _age += dt;
             float t = Mathf.Clamp01(_age / _dur);
             // Ease-in-out so the hop reads as a deliberate zip, not a linear slide.
             float e = t * t * (3f - 2f * t);
