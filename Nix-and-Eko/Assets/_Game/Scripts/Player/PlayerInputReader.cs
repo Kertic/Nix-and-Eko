@@ -17,6 +17,11 @@ namespace NixAndEko.Player
     /// (reticle shows only while it's deflected); moving the mouse selects mouse aiming (reticle
     /// tracks the cursor). <see cref="Combat.Bow"/> reads <see cref="AimStickActive"/> /
     /// <see cref="MouseAiming"/> and resolves the actual direction against the player's centre.
+    ///
+    /// Nix and the controllable Eko phantom each get their own reader over the same
+    /// <see cref="InputActionAsset"/> — see <see cref="routed"/> and
+    /// <see cref="manageActionMapLifecycle"/> for how control is handed between them (driven by
+    /// <see cref="Combat.EkoSummoner"/>).
     /// </summary>
     [DefaultExecutionOrder(-100)]   // sample input before anything reads it this frame
     public class PlayerInputReader : MonoBehaviour
@@ -26,6 +31,17 @@ namespace NixAndEko.Player
 
         [Tooltip("Optional; when set, the aim-stick thresholds below are taken from it.")]
         public PlayerConfig config;
+
+        [Tooltip("Enable/disable the shared 'Player' action map on OnEnable/OnDisable. Nix's reader " +
+                 "keeps this on; Eko's reader (which shares the same InputActionAsset) leaves it " +
+                 "off so toggling the phantom's GameObject can't fight over who owns the map.")]
+        public bool manageActionMapLifecycle = true;
+
+        [Tooltip("While false, every output below reads as neutral (no input) regardless of what's " +
+                 "actually being pressed — used to mute Nix's reader while the player is possessing " +
+                 "Eko, and Eko's reader the rest of the time. Both readers sample the same physical " +
+                 "input; only the routed one passes it through.")]
+        public bool routed = true;
 
         [Header("Aim stick (gamepad)")]
         [Tooltip("How far the right stick must be pushed before it counts as aiming the bow.")]
@@ -51,11 +67,13 @@ namespace NixAndEko.Player
 
         public bool JumpPressed { get; private set; }
 
-        /// <summary>The frame the Nix Bow button (R2 / LMB) went down — fires the shot, or sends Eko to fetch when empty.</summary>
+        /// <summary>The frame the Nix Bow button (R2 / LMB) went down — fires the shot; while
+        /// possessing Eko, tries to send control home instead (see <see cref="Combat.EkoSummoner"/>).</summary>
         public bool NixBowPressed { get; private set; }
-        /// <summary>True while the Nix Bow button is held — used to charge a forced Eko fetch when the phantom is out.</summary>
+        /// <summary>True while the Nix Bow button is held.</summary>
         public bool NixBowHeld { get; private set; }
-        /// <summary>The frame the Eko button (L1 / Q) went down — plants / prepares / fires / returns the phantom.</summary>
+        /// <summary>The frame the Eko button (L1 / Q) went down — plants Eko where Nix stands and
+        /// hands control to it.</summary>
         public bool EkoPressed { get; private set; }
         /// <summary>The frame the Nix Melee button (R1 / RMB) went down — melee combo, or a roll when unarmed.</summary>
         public bool MeleePressed { get; private set; }
@@ -93,11 +111,14 @@ namespace NixAndEko.Player
             _interact = map.FindAction("Interact");
         }
 
-        void OnEnable() => actions?.FindActionMap("Player")?.Enable();
+        void OnEnable()
+        {
+            if (manageActionMapLifecycle) actions?.FindActionMap("Player")?.Enable();
+        }
 
         void OnDisable()
         {
-            actions?.FindActionMap("Player")?.Disable();
+            if (manageActionMapLifecycle) actions?.FindActionMap("Player")?.Disable();
             AimStickActive = false;
             GlideHeld = false;
             NixBowPressed = NixBowHeld = EkoPressed = MeleePressed = false;
@@ -105,6 +126,23 @@ namespace NixAndEko.Player
 
         void Update()
         {
+            // Muted: someone else currently owns the physical input (see `routed`). Read nothing,
+            // report nothing — the actions themselves stay enabled (shared with whichever reader
+            // *is* routed right now), only this reader's outputs go neutral.
+            if (!routed)
+            {
+                Move = Vector2.zero;
+                Aim = Vector2.zero;
+                AimStickActive = false;
+                MouseAiming = false;
+                JumpPressed = false;
+                NixBowPressed = NixBowHeld = EkoPressed = MeleePressed = false;
+                GlideHeld = false;
+                CrouchHeld = false;
+                InteractPressed = false;
+                return;
+            }
+
             Move = _move != null ? _move.ReadValue<Vector2>() : Vector2.zero;
 
             JumpPressed = _jump != null && _jump.WasPressedThisFrame();

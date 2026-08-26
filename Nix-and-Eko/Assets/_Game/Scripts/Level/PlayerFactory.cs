@@ -72,20 +72,21 @@ namespace NixAndEko.Level
             var oneWay = go.AddComponent<OneWayPassenger>();
             oneWay.player = controller;
 
-            // Eko lives in world space (under the level root, not the player) so the phantom
-            // stays frozen where it was planted while Nix flies off.
-            Eko eko = BuildEko(parent, arrowTemplate, controller);
+            // Eko: a second full character (walk/jump/fall, no bow) that the player possesses
+            // directly on L1. Lives under the level root (not parented to Nix), same as before,
+            // so it keeps its own transform once control hands back and it goes dormant.
+            var (ekoPlayer, ekoInput, eko) = BuildEko(parent, config, inputAsset, groundLayer);
+            eko.player = controller;
+            // Never let the two bodies physically shove each other while both are simulating.
+            Physics2D.IgnoreCollision(col, ekoPlayer.GetComponent<Collider2D>(), true);
 
             var summoner = go.AddComponent<EkoSummoner>();
             summoner.player = controller;
             summoner.input = reader;
             summoner.bow = bow;
             summoner.eko = eko;
-
-            // Lets Eko's arrows catch Nix and reload her air shot + glide meter.
-            var ekoTarget = go.AddComponent<EkoArrowTarget>();
-            ekoTarget.bow = bow;
-            ekoTarget.player = controller;
+            summoner.ekoPlayer = ekoPlayer;
+            summoner.ekoInput = ekoInput;
 
             go.SetActive(true);   // everything is wired; let the components wake
             return controller;
@@ -190,49 +191,58 @@ namespace NixAndEko.Level
         }
 
         /// <summary>
-        /// The Eko phantom: a translucent blue echo of Nix that gets planted in the world, plus
-        /// its straight-line shot preview. Built once and kept inactive between summons.
+        /// The Eko phantom: a second full character — same rigidbody/collider/sprite/animator
+        /// setup as Nix, walking, jumping and falling under its own <see cref="PlayerController"/>
+        /// — but with no bow of its own (Eko can't fire; see <see cref="EkoSummoner"/>). Built once
+        /// and kept inactive between possessions, exactly like Nix's own build above.
         /// </summary>
-        static Eko BuildEko(Transform parent, Arrow arrowTemplate, PlayerController player)
+        static (PlayerController, PlayerInputReader, Eko) BuildEko(
+            Transform parent, PlayerConfig config, InputActionAsset inputAsset, int groundLayer)
         {
             var go = new GameObject("Eko");
-            go.transform.SetParent(parent, false);
             go.SetActive(false);
+            go.transform.SetParent(parent, false);
 
-            // Trigger so one of Nix's arrows can strike the phantom and swap their places. Sized to
-            // the silhouette; a trigger never blocks or shoves anything.
+            // PlayerController.Awake() sets gravityScale/interpolation/collision-detection on
+            // whatever Rigidbody2D it finds, same as Nix's — no need to set them twice here.
+            go.AddComponent<Rigidbody2D>();
+
             var col = go.AddComponent<BoxCollider2D>();
-            col.isTrigger = true;
-            col.size = new Vector2(0.8f, 0.9f);
+            col.size = new Vector2(0.9f, 0.9f);
 
             var spriteGo = new GameObject("Sprite");
             spriteGo.transform.SetParent(go.transform, false);
             var sr = spriteGo.AddComponent<SpriteRenderer>();
-            // In front of Nix (11 > her 10) so the translucent echo is always visible, even when
-            // it's planted right on top of her before she moves off.
+            // In front of Nix (10) so the translucent echo is always visible, even planted right
+            // on top of her the instant control swaps over.
             sr.sortingOrder = 11;
             sr.sprite = ArcherSprites.IdleFrames[0];
 
-            // Straight shot preview — two points, so no arc simulation needed.
-            var trajGo = new GameObject("Trajectory");
-            trajGo.transform.SetParent(go.transform, false);
-            var lr = trajGo.AddComponent<LineRenderer>();
-            lr.useWorldSpace = true;
-            lr.widthMultiplier = 0.1f;
-            lr.numCapVertices = 2;
-            lr.textureMode = LineTextureMode.Tile;
-            lr.alignment = LineAlignment.View;
-            lr.sortingOrder = 19;
-            lr.positionCount = 0;
-            trajGo.AddComponent<ProceduralLine>(); // keeps the material valid across save/reload
+            var controller = go.AddComponent<PlayerController>();
+            controller.config = config;
+            controller.spriteRoot = spriteGo.transform;
+            controller.groundMask = 1 << groundLayer;
+
+            var animator = spriteGo.AddComponent<PlayerAnimator>();
+            animator.player = controller;
+
+            // A second reader over the same actions asset as Nix's — only one of the two is ever
+            // "routed" (live) at a time; see PlayerInputReader.routed / manageActionMapLifecycle.
+            var reader = go.AddComponent<PlayerInputReader>();
+            reader.actions = inputAsset;
+            reader.config = config;
+            reader.manageActionMapLifecycle = false;   // Nix's reader owns the shared action map
+            reader.routed = false;                     // silent until EkoSummoner hands control over
+            controller.input = reader;
+
+            // Decides, each physics step, which one-way platforms are solid for it — same as Nix.
+            var oneWay = go.AddComponent<OneWayPassenger>();
+            oneWay.player = controller;
 
             var eko = go.AddComponent<Eko>();
             eko.sprite = sr;
-            eko.trajectory = lr;
-            eko.arrowPrefab = arrowTemplate;
-            eko.player = player;
-            eko.passThroughMarkers = BuildPassThroughMarkers(go.transform);
-            return eko;
+
+            return (controller, reader, eko);
         }
 
         /// <summary>

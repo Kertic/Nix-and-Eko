@@ -298,20 +298,6 @@ namespace NixAndEko.Combat
                 other.transform != _homingTarget && !other.transform.IsChildOf(_homingTarget))
                 return;
 
-            // One of Nix's own arrows striking the Eko phantom swaps their places — Eko's own
-            // arrows never do (isEkoArrow). The arrow drops as a pickup at the impact point, which
-            // (after the swap) is exactly where Nix lands, so she can grab it right back.
-            if (!isEkoArrow)
-            {
-                var eko = other.GetComponentInParent<Eko>();
-                if (eko != null && eko.Active)
-                {
-                    eko.OnNixArrowHit();
-                    Stick(transform);   // Nix arrow → becomes a pickup where it struck
-                    return;
-                }
-            }
-
             // Give the struck object a chance to react (and to reject sticking). Nix's single arrow
             // still triggers a "consume" target (switch, breakable, enemy) but is never destroyed by
             // it — it drops right there as a pickup so she can always get it back.

@@ -4,10 +4,11 @@ using UnityEngine;
 namespace NixAndEko.Player.States
 {
     /// <summary>
-    /// Rising portion of a bow-recoil launch (there's no button-jump any more — this is entered
-    /// only when <see cref="NixAndEko.Combat.Bow"/> fires a downward shot and kicks the player
-    /// upward). Uses the lighter "up" gravity for a floatier rise, then hands off to
-    /// <see cref="PlayerController.Fall"/> for the heavier descent once the apex is reached.
+    /// Rising portion of a jump — entered either by a direct button-jump
+    /// (<see cref="PlayerStateBase.TryButtonJump"/>) or when <see cref="NixAndEko.Combat.Bow"/>
+    /// fires a downward shot and kicks the player upward as recoil. Uses the lighter "up" gravity
+    /// for a floatier rise, then hands off to <see cref="PlayerController.Fall"/> for the heavier
+    /// descent once the apex is reached.
     /// </summary>
     public class JumpState : PlayerStateBase
     {

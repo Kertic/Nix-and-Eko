@@ -151,18 +151,20 @@ namespace NixAndEko.EditorTools
             hud.health = player.GetComponent<Health>();
             hud.bow = player.GetComponentInChildren<Bow>();
 
-            ConfigureCamera(level);
+            ConfigureCamera(level, player);
 
             Selection.activeGameObject = root;
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene());
             Debug.Log("[Builder] Built '" + level.name + "' (" + level.blocks.Count + " blocks). Press Play.\n" +
                       "Keyboard: A/D move, Space jump, C crouch (C+Space drops through white platforms). " +
-                      "Mouse aims. LMB = Nix Bow (fire / fetch when empty), RMB = Nix Melee, Q = Eko.\n" +
+                      "Mouse aims. LMB = Nix Bow (fire / walk over your arrow to reclaim it), RMB = Nix Melee, Q = Eko.\n" +
                       "Gamepad (PS5 labels): left stick or d-pad move, X jump, Circle crouch. Right stick aims. " +
                       "R2 = Nix Bow, R1 = Nix Melee (3-hit combo with an arrow, roll without), L1 = Eko.\n" +
-                      "You have one arrow: fire it, then walk over it or press R2 to send Eko to fetch it. " +
-                      "Shoot a planted Eko to swap places. Cling to walls to slide; downward shots recoil you up.");
+                      "L1 plants Eko where Nix stands and hands you control of it — Nix freezes in place. " +
+                      "Eko walks and jumps just like Nix but can't fire; walk it onto Nix's downed arrow to " +
+                      "grab it, then press the Nix Bow button to send Eko home (only works while Nix is " +
+                      "grounded — otherwise Eko just vanishes). Cling to walls to slide.");
         }
 
         /// <summary>Root names used by earlier versions, cleaned up so rebuilds never stack up.</summary>
@@ -359,7 +361,7 @@ namespace NixAndEko.EditorTools
 
         // ============================================================ helpers
 
-        static void ConfigureCamera(LevelData level)
+        static void ConfigureCamera(LevelData level, PlayerController player = null)
         {
             var cam = Camera.main;
             if (cam == null) return;
@@ -382,8 +384,11 @@ namespace NixAndEko.EditorTools
             }
 
             // The level is far bigger than one screen now, so the camera follows the archer.
-            if (cam.GetComponent<CameraFollow>() == null)
-                cam.gameObject.AddComponent<CameraFollow>();
+            var follow = cam.GetComponent<CameraFollow>();
+            if (follow == null) follow = cam.gameObject.AddComponent<CameraFollow>();
+            // Eko is a second PlayerController sharing the scene now, so this has to be explicit —
+            // CameraFollow's own "find any PlayerController" fallback can no longer tell them apart.
+            if (player != null) follow.target = player.transform;
         }
 
         static void TrySet(Object target, string field, object value)

@@ -37,16 +37,19 @@ namespace NixAndEko.Level
             int groundLayer = Mathf.Max(0, LayerMask.NameToLayer(groundLayerName));
             LevelBuilder.Build(level, transform, groundLayer);
 
+            PlayerController player = null;
             if (spawnPlayer)
             {
                 Arrow arrow = PlayerFactory.BuildArrowTemplate(transform);
-                PlayerController player = PlayerFactory.Build(playerConfig, inputActions, groundLayer,
+                player = PlayerFactory.Build(playerConfig, inputActions, groundLayer,
                     arrow, level.playerSpawn, transform, level.killY);
 
                 if (spawnDebugHud) AddDebugHud(player);
             }
 
-            if (configureCamera) ConfigureCamera();
+            // Eko exists as a second PlayerController now (see PlayerFactory), so the camera needs
+            // to be told explicitly who to follow rather than finding "the" PlayerController.
+            if (configureCamera) ConfigureCamera(player);
         }
 
         void AddDebugHud(PlayerController player)
@@ -64,7 +67,7 @@ namespace NixAndEko.Level
         /// archer, with pixel-perfect upscaling when the package is present. Runtime-safe — the
         /// PixelPerfectCamera type is resolved by reflection so there's no hard package dependency.
         /// </summary>
-        void ConfigureCamera()
+        void ConfigureCamera(PlayerController player)
         {
             var cam = Camera.main;
             if (cam == null) return;
@@ -86,8 +89,11 @@ namespace NixAndEko.Level
                 TrySet(ppc, "pixelSnapping", true);
             }
 
-            if (cam.GetComponent<CameraFollow>() == null)
-                cam.gameObject.AddComponent<CameraFollow>();
+            var follow = cam.GetComponent<CameraFollow>();
+            if (follow == null) follow = cam.gameObject.AddComponent<CameraFollow>();
+            // Eko is a second PlayerController sharing the scene now, so this has to be explicit —
+            // CameraFollow's own "find any PlayerController" fallback can no longer tell them apart.
+            if (player != null) follow.target = player.transform;
         }
 
         static void TrySet(Object target, string field, object value)

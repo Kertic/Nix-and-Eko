@@ -5,9 +5,9 @@ using UnityEngine;
 namespace NixAndEko.EditorTools
 {
     /// <summary>
-    /// Custom inspector for <see cref="PlayerConfig"/>. There's no button-jump any more — the
-    /// closest thing to a "jump" is a full-charge shot fired straight down (or down-left /
-    /// down-right), which recoils the player upward. Rather than authoring jump height directly,
+    /// Custom inspector for <see cref="PlayerConfig"/>. A jump — the button-jump (X / Space) or
+    /// the bow-recoil "jump" (a full-charge shot fired straight down, or down-left / down-right)
+    /// — always launches at recoilMax. Rather than authoring jump height directly,
     /// it falls out of recoilMax / gravityUp / gravityDown / moveSpeed — this box surfaces the
     /// resulting numbers (this asset, or the live "Config Values" foldout on
     /// <see cref="PlayerController"/>) so the effect of a tweak is visible immediately.
@@ -75,8 +75,8 @@ namespace NixAndEko.EditorTools
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Derived \"Jump\" Stats", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "There's no button-jump — a \"jump\" is a full-charge shot fired straight down " +
-                "(or down-left / down-right), which recoils the player upward at recoilMax. " +
+                "The button-jump and the bow-recoil \"jump\" (a full-charge shot fired straight " +
+                "down, or down-left / down-right) both launch the player upward at recoilMax. " +
                 "Tick Lock next to a stat to author it directly instead of just reading it off — " +
                 "the physics field it governs (grayed out above) is solved to match, so tweaking " +
                 "anything else that feeds the formula keeps this number exact.",

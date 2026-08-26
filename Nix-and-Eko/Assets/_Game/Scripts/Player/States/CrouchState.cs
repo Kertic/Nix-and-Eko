@@ -13,8 +13,8 @@ namespace NixAndEko.Player.States
             if (TryMeleeOrRoll()) return;
             if (!P.Grounded) { P.Machine.ChangeState(P.Fall); return; }
 
-            // Crouch + jump = drop through a one-way platform if standing on one.
-            // (There's no button-jump any more, so this input has no other effect.)
+            // Crouch + jump = drop through a one-way platform if standing on one, instead of
+            // jumping — a normal button-jump only fires from Idle/Move (see TryButtonJump).
             if (P.BufferedJump && OneWayPlatform.TryDropThrough(P))
             {
                 P.ConsumeJumpBuffer();

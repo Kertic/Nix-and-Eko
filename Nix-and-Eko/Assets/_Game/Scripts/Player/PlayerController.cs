@@ -61,9 +61,9 @@ namespace NixAndEko.Player
         public int Facing { get; private set; } = 1;
 
         // --- Timers shared between states ---
-        /// <summary>Buffers a Jump press briefly so crouch + jump can drop through a one-way
-        /// platform even if the press lands a frame early. There's no button-jump any more —
-        /// this is the platform's only remaining consumer.</summary>
+        /// <summary>Buffers a Jump press briefly so it still lands a frame early — consumed by
+        /// the grounded button-jump (see <see cref="States.PlayerStateBase.TryButtonJump"/>) and by
+        /// crouch + jump dropping through a one-way platform.</summary>
         public float JumpBufferTimer;
         /// <summary>Seconds remaining before horizontal steering input is honored again. Used by
         /// bursts (recoil, dashes) so held input can't immediately cancel the kick out.</summary>
