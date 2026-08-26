@@ -161,10 +161,15 @@ namespace NixAndEko.EditorTools
                       "Mouse aims. LMB = Nix Bow (fire / walk over your arrow to reclaim it), RMB = Nix Melee, Q = Eko.\n" +
                       "Gamepad (PS5 labels): left stick or d-pad move, X jump, Circle crouch. Right stick aims. " +
                       "R2 = Nix Bow, R1 = Nix Melee (3-hit combo with an arrow, roll without), L1 = Eko.\n" +
-                      "L1 plants Eko where Nix stands and hands you control of it — Nix freezes in place. " +
-                      "Eko walks and jumps just like Nix but can't fire; walk it onto Nix's downed arrow to " +
-                      "grab it, then press the Nix Bow button to send Eko home (only works while Nix is " +
-                      "grounded — otherwise Eko just vanishes). Cling to walls to slide.");
+                      "L1 plants Eko where Nix stands and hands you control of it — Nix ghosts (crouched, " +
+                      "translucent, intangible, frozen) while you drive Eko. Aim Eko with the right stick / " +
+                      "mouse; the straight blue line previews the shot (Eko's arrows ignore gravity). " +
+                      "L1 again plants Eko where it stands with its aim kept — control returns to Nix and " +
+                      "Eko freezes so an air shot lines up cleanly. From Nix, L1 fires the planted shot. " +
+                      "R2 while possessing is the shortcut: plant + fire in one press. Walk Eko onto Nix's " +
+                      "downed arrow to grab it — it's handed back on the return. When Nix is empty, R2 " +
+                      "sends Eko to fetch the arrow instead (a planted phantom vanishes first). Cling to " +
+                      "walls to slide.");
         }
 
         /// <summary>Root names used by earlier versions, cleaned up so rebuilds never stack up.</summary>

@@ -72,11 +72,13 @@ namespace NixAndEko.Level
             var oneWay = go.AddComponent<OneWayPassenger>();
             oneWay.player = controller;
 
-            // Eko: a second full character (walk/jump/fall, no bow) that the player possesses
-            // directly on L1. Lives under the level root (not parented to Nix), same as before,
-            // so it keeps its own transform once control hands back and it goes dormant.
-            var (ekoPlayer, ekoInput, eko) = BuildEko(parent, config, inputAsset, groundLayer);
+            // Eko: a second full character (walk/jump/fall) that the player possesses on L1.
+            // Also owns its own aim indicator + straight-line preview + firing (Eko's blue arrows).
+            // Lives under the level root (not parented to Nix), so it keeps its own transform once
+            // control hands back and it goes dormant.
+            var (ekoPlayer, ekoInput, eko) = BuildEko(parent, config, inputAsset, groundLayer, arrowTemplate);
             eko.player = controller;
+            eko.nixBow = bow;
             // Never let the two bodies physically shove each other while both are simulating.
             Physics2D.IgnoreCollision(col, ekoPlayer.GetComponent<Collider2D>(), true);
 
@@ -87,6 +89,14 @@ namespace NixAndEko.Level
             summoner.eko = eko;
             summoner.ekoPlayer = ekoPlayer;
             summoner.ekoInput = ekoInput;
+            summoner.nixHealth = health;
+            summoner.nixSprite = sr;
+
+            // Lets Eko's arrows catch Nix — planted-phantom shots that hit her reload her air shot,
+            // top glide back up, and launch her along Eko's aim.
+            var ekoTarget = go.AddComponent<EkoArrowTarget>();
+            ekoTarget.bow = bow;
+            ekoTarget.player = controller;
 
             go.SetActive(true);   // everything is wired; let the components wake
             return controller;
@@ -197,7 +207,8 @@ namespace NixAndEko.Level
         /// and kept inactive between possessions, exactly like Nix's own build above.
         /// </summary>
         static (PlayerController, PlayerInputReader, Eko) BuildEko(
-            Transform parent, PlayerConfig config, InputActionAsset inputAsset, int groundLayer)
+            Transform parent, PlayerConfig config, InputActionAsset inputAsset, int groundLayer,
+            Arrow arrowTemplate)
         {
             var go = new GameObject("Eko");
             go.SetActive(false);
@@ -241,6 +252,40 @@ namespace NixAndEko.Level
 
             var eko = go.AddComponent<Eko>();
             eko.sprite = sr;
+            eko.arrowPrefab = arrowTemplate;
+            eko.ekoPlayer = controller;
+            eko.ekoInput = reader;
+
+            // Aim reticle — same shape as Nix's Bow indicator, tinted blue by Eko itself each frame.
+            var indicatorGo = new GameObject("EkoAimIndicator");
+            indicatorGo.transform.SetParent(go.transform, false);
+            var indSr = indicatorGo.AddComponent<SpriteRenderer>();
+            indSr.sortingOrder = 20;
+            var indPs = indicatorGo.AddComponent<ProceduralSprite>();
+            indPs.shape = ProceduralSprite.Shape.Arrow;
+            indPs.primary = Palette.White;
+            indPs.secondary = Palette.LightGrey;
+            indPs.pixelsX = 12; indPs.pixelsY = 5;
+            indPs.Rebuild();
+            indicatorGo.SetActive(false);
+            eko.aimIndicator = indicatorGo.transform;
+            eko.aimIndicatorRenderer = indSr;
+
+            // Straight-line shot preview.
+            var trajGo = new GameObject("EkoTrajectory");
+            trajGo.transform.SetParent(go.transform, false);
+            var lr = trajGo.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.widthMultiplier = 0.1f;
+            lr.numCapVertices = 2;
+            lr.textureMode = LineTextureMode.Tile;
+            lr.alignment = LineAlignment.View;
+            lr.sortingOrder = 19;
+            lr.positionCount = 0;
+            trajGo.AddComponent<ProceduralLine>();
+            eko.trajectory = lr;
+
+            eko.passThroughMarkers = BuildPassThroughMarkers(go.transform);
 
             return (controller, reader, eko);
         }

@@ -35,6 +35,15 @@ namespace NixAndEko.Player
         {
             if (player == null) return;
 
+            // Ghost mode (Nix while the player is possessing Eko): show the crouch pose regardless
+            // of the frozen locomotion state underneath.
+            if (player.ForceGhostPose)
+            {
+                SetClip(PlayerController.AnimState.Crouch);
+                if (_frames != null && _frames.Length > 0) _sr.sprite = _frames[0];
+                return;
+            }
+
             SetClip(player.Anim);
             if (_frames == null || _frames.Length == 0) return;
 

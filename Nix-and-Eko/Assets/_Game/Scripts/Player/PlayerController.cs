@@ -38,6 +38,32 @@ namespace NixAndEko.Player
         public PlayerConfig Config => config;
         public PlayerInputReader Input => input;
 
+        /// <summary>Fully suspend this controller — physics off, state machine idle. Nix uses this
+        /// while the player is possessing Eko (ghost mode): she stays put wherever she was, doesn't
+        /// tick states, doesn't collide with anything, and isn't sensed by anyone's physics queries.
+        /// <see cref="ForceGhostPose"/> handles the matching visual (crouch pose + translucency).</summary>
+        public bool Frozen { get; private set; }
+        /// <summary>Force the sprite to the Crouch pose regardless of the current locomotion state
+        /// — used by ghost-mode Nix, who shouldn't run her regular animator while frozen.</summary>
+        public bool ForceGhostPose;
+
+        /// <summary>Enter/leave the ghost-frozen suspend. Zeroes velocity, kills physics interaction
+        /// (colliders included) and stops the state machine ticking. Reversible; safe to call twice.</summary>
+        public void SetFrozen(bool frozen)
+        {
+            if (Frozen == frozen) return;
+            Frozen = frozen;
+            if (frozen)
+            {
+                if (Rb != null) { Rb.linearVelocity = Vector2.zero; Rb.simulated = false; }
+                Grounded = false;   // sensed value would go stale; keep "unknown/no" while suspended
+            }
+            else
+            {
+                if (Rb != null) Rb.simulated = true;
+            }
+        }
+
         // --- Sensing state ---
         public bool Grounded { get; private set; }
         public bool WasGrounded { get; private set; }
@@ -175,6 +201,7 @@ namespace NixAndEko.Player
 
         void Update()
         {
+            if (Frozen) { currentState = "Frozen"; return; }
             Sense();
             // Just touched down after a real airborne stretch (AirTimer is reset below in
             // UpdateTimers, so it still holds last frame's airtime here). Skips the spawn frame.
@@ -184,7 +211,11 @@ namespace NixAndEko.Player
             currentState = _machine.Current?.GetType().Name;
         }
 
-        void FixedUpdate() => _machine.FixedTick(Time.fixedDeltaTime);
+        void FixedUpdate()
+        {
+            if (Frozen) return;
+            _machine.FixedTick(Time.fixedDeltaTime);
+        }
 
         // ------------------------------------------------------------------ Sensing
         readonly List<Collider2D> _probeHits = new List<Collider2D>();

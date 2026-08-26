@@ -1,3 +1,4 @@
+using NixAndEko.Environment;
 using NixAndEko.Player;
 using NixAndEko.Util;
 using UnityEngine;
@@ -5,25 +6,26 @@ using UnityEngine;
 namespace NixAndEko.Combat
 {
     /// <summary>
-    /// Drives the Eko possession and Nix's arrow retrieval.
+    /// Owns the whole Eko possession cycle. The button flow across a summon is:
     ///
-    /// <para><b>Eko button (L1)</b> plants Eko where Nix stands and hands control straight to it —
-    /// Nix freezes on the spot (her own locomotion keeps ticking with no input, so she still falls
-    /// if summoned mid-air) while the player walks/jumps Eko around instead, using Eko's own full
-    /// locomotion (<see cref="ekoPlayer"/>, built alongside Nix's — see
-    /// <see cref="Level.PlayerFactory"/>). Eko has no bow: the Nix Bow button doesn't fire while
-    /// possessed, it tries to send control home instead. That only lands cleanly while Nix is
-    /// grounded (an orb carries Eko back and, if they'd grabbed Nix's downed arrow along the way,
-    /// hands it over on arrival); pressed while she's still airborne, Eko is yanked out of the
-    /// world on the spot instead — a "vanish" that ends the possession early (a carried arrow is
-    /// still handed back either way, so a mistimed press can't strand Nix without ammo).</para>
+    /// <list type="number">
+    /// <item><b>L1 (Nix)</b>: <see cref="BeginPossession"/> — plant Eko on Nix's spot, hand
+    /// control to it, and drop Nix into ghost mode (crouched, translucent, intangible, frozen).</item>
+    /// <item><b>L1 (Eko)</b>: <see cref="FreezeAndReturn"/> — hand control back to Nix, leaving
+    /// Eko frozen where it stood with its current aim preserved. Nix wakes back up.</item>
+    /// <item><b>R2 (Eko)</b>: <see cref="FireImmediate"/> — a shortcut that does the L1-then-L1
+    /// beat in one press: freeze + return + fire, all in the same frame.</item>
+    /// <item><b>L1 (Nix, planted phantom out)</b>: <see cref="FireOrReturnPhantom"/> — if the
+    /// player actually aimed Eko during the possession the shot fires (and the phantom orbs
+    /// home); otherwise the phantom just orbs home without firing.</item>
+    /// <item><b>R2 (Nix, no arrow in hand)</b>: <see cref="TryStartFetch"/> — sends Eko out to
+    /// grab Nix's downed arrow and hand it back. If a planted phantom is standing, that phantom
+    /// vanishes first and the fetch orb sets off from wherever it stood.</item>
+    /// </list>
     ///
-    /// <para>While possessed, walking Eko close enough to Nix's last fired arrow grabs it (see
-    /// <see cref="TryGrabArrow"/>) — the only way to retrieve it in this mode; there's no
-    /// automatic fetch any more.</para>
-    ///
-    /// Eko is a once-per-airtime resource, exactly like the mid-air bow shot: summoning spends the
-    /// charge, and it only comes back by touching the ground.
+    /// While possessed, walking Eko close enough to Nix's downed arrow grabs it too — that's
+    /// a separate, direct retrieval path. Eko is a once-per-airtime resource: summoning spends
+    /// the charge, and it only comes back when Nix actually stands on ground again.
     /// </summary>
     public class EkoSummoner : MonoBehaviour
     {
@@ -36,26 +38,47 @@ namespace NixAndEko.Combat
         public PlayerController ekoPlayer;
         [Tooltip("Eko's own input reader, over the same actions asset as Nix's — see PlayerInputReader.routed.")]
         public PlayerInputReader ekoInput;
+        [Tooltip("Nix's Health, granted infinite invuln while she's in ghost mode so nothing can " +
+                 "hurt the intangible target.")]
+        public Health nixHealth;
+        [Tooltip("Nix's sprite renderer — dimmed to translucent while she's in ghost mode.")]
+        public SpriteRenderer nixSprite;
 
         [Header("Arrow grab")]
         [Tooltip("How close Eko must walk to Nix's downed arrow to pick it up.")]
         public float grabRadius = 0.8f;
 
-        /// <summary>False once a phantom has been summoned, until Nix next touches the ground.</summary>
+        [Header("Fetch (R2 with no arrow)")]
+        [Tooltip("Seconds the fetch orb takes for each leg (Eko/phantom -> arrow, then arrow -> " +
+                 "Nix) — fixed regardless of distance, so a far-off arrow doesn't take forever.")]
+        public float fetchLegDuration = 0.35f;
+
+        [Header("Ghost mode look")]
+        [Tooltip("Nix's sprite alpha while she's the intangible ghost — 1 = normal, 0 = invisible.")]
+        [Range(0f, 1f)]
+        public float ghostAlpha = 0.45f;
+
+        /// <summary>False once a phantom has been summoned this airtime, until Nix stands on ground again.</summary>
         public bool CanSummon => !_spent;
         /// <summary>True while the player is directly controlling Eko.</summary>
         public bool Possessing => _possessing;
 
         bool _spent;
         bool _possessing;
-        bool _carryingArrow;   // Eko grabbed Nix's downed arrow and is holding it for the return
+        bool _carryingArrow;
+        bool _fetching;   // an orb fetch is in flight (Eko is busy — no summon, no re-fetch)
         CameraFollow _camera;
+        Color _nixOriginalColor;
+        bool _nixColorCached;
 
         void Awake()
         {
             if (player == null) player = GetComponent<PlayerController>();
             if (input == null && player != null) input = player.Input;
             if (bow == null) bow = GetComponentInChildren<Bow>();
+            if (nixHealth == null && player != null) nixHealth = player.GetComponent<Health>();
+            if (nixSprite == null && player != null && player.spriteRoot != null)
+                nixSprite = player.spriteRoot.GetComponent<SpriteRenderer>();
         }
 
         void Update()
@@ -63,14 +86,97 @@ namespace NixAndEko.Combat
             if (input == null || bow == null || eko == null || player == null ||
                 ekoPlayer == null || ekoInput == null) return;
 
-            // Landing gives the phantom back.
-            if (player.GroundedForRecoil) _spent = false;
+            // Ghost-mode Nix reports Grounded = false (physics is suspended); still, once she's
+            // back in control and touches ground, the summon recharges.
+            if (!_possessing && player.GroundedForRecoil) _spent = false;
 
-            if (_possessing) { UpdateWhilePossessing(); return; }
+            // Keep Nix invuln topped up while she's ghosting (rather than one big grant that could
+            // race with an existing shorter timer).
+            if (_possessing && nixHealth != null) nixHealth.GrantInvuln(0.2f);
 
-            if (input.EkoPressed && CanSummon && !eko.Active) BeginPossession();
+            if (_possessing) UpdateWhilePossessing();
+            else UpdateWhileNixControlled();
         }
 
+        // ------------------------------------------------------------------ Nix-side input
+        void UpdateWhileNixControlled()
+        {
+            // R2 with no arrow in hand always sends Eko out to fetch, regardless of what Eko is
+            // doing right now — a planted phantom vanishes on the spot so the fetch orb can leave
+            // from where it stood; a dormant Eko sends the orb from Nix. Bow.Update already only
+            // fires on R2 when Nix has an arrow, so this branch is unambiguous.
+            if (input.NixBowPressed && !bow.HasAnyArrow && !_fetching)
+            {
+                TryStartFetch();
+                return;
+            }
+
+            if (!input.EkoPressed) return;
+
+            if (eko.Active && eko.Frozen)
+            {
+                // Planted phantom out and Nix pressed L1 — fire it (or dismiss cleanly if no aim was set).
+                FireOrReturnPhantom();
+                return;
+            }
+
+            if (!eko.Active && CanSummon && !_fetching) BeginPossession();
+        }
+
+        /// <summary>Kick off the fetch orb. Bails silently if there's no downed arrow to grab
+        /// (Nix must be genuinely empty, not just aiming empty-handed at nothing).</summary>
+        void TryStartFetch()
+        {
+            Arrow arrow = bow.LastFiredArrow;
+            if (arrow == null) return;
+
+            // A planted phantom vanishes on the spot and the orb leaves from where it stood — the
+            // vanish burst doubles as the "orb is separating" beat. If Eko was dormant, the orb
+            // just sets off from Nix.
+            Vector3 from = player.transform.position;
+            if (eko.Active)
+            {
+                from = eko.transform.position;
+                eko.Vanish();
+            }
+
+            StartFetch(from, arrow);
+        }
+
+        /// <summary>Orb out from <paramref name="from"/> to the downed arrow (homing on its live
+        /// visual centre so it always makes contact), grab it, then orb back to hand it to Nix.
+        /// Each leg takes a fixed <see cref="fetchLegDuration"/> regardless of distance.</summary>
+        void StartFetch(Vector3 from, Arrow arrow)
+        {
+            _fetching = true;
+            bool wasBlue = arrow.blue;
+
+            EkoOrb.Chase(from, () => ArrowCenter(arrow), fetchLegDuration, onArrive: () =>
+            {
+                Vector3 grabAt = arrow != null ? ArrowCenter(arrow) : player.transform.position;
+                if (arrow != null) Destroy(arrow.gameObject);
+
+                EkoOrb.Chase(grabAt, () => player.transform.position, fetchLegDuration, onArrive: () =>
+                {
+                    bow.GiveArrow(wasBlue);
+                    _fetching = false;
+                });
+            });
+        }
+
+        // ------------------------------------------------------------------ Eko-side input
+        void UpdateWhilePossessing()
+        {
+            TryGrabArrow();
+
+            // R2 during possession = "commit and fire" in one press — a shortcut for L1-then-L1.
+            if (ekoInput.NixBowPressed) { FireImmediate(); return; }
+
+            // L1 while controlling Eko = hand control back to Nix, leave Eko planted with aim.
+            if (ekoInput.EkoPressed) FreezeAndReturn();
+        }
+
+        // ------------------------------------------------------------------ transitions
         void BeginPossession()
         {
             _spent = true;
@@ -78,33 +184,100 @@ namespace NixAndEko.Combat
             _carryingArrow = false;
 
             Vector3 pos = player.transform.position;
-            eko.Summon(pos, player.Facing);   // sets transform.position — same transform as ekoPlayer
+            eko.Summon(pos, player.Facing, player.groundMask);
+            SnapEkoBody(pos, player.Facing);
 
-            // Also sync the Rigidbody2D's internal position (a transform write alone doesn't fully
-            // relocate an interpolated body), and reset velocity/state to a clean start regardless
-            // of whatever Eko was doing the last time it was dismissed.
-            ekoPlayer.Rb.position = pos;
-            ekoPlayer.Velocity = Vector2.zero;
-            ekoPlayer.SetFacing(player.Facing);
-            ekoPlayer.Machine.ChangeState(ekoPlayer.Idle);
-
-            // Route the physical input to Eko and mute Nix's own reader.
+            // Route input and swap cameras.
             input.routed = false;
             ekoInput.routed = true;
-
             FollowTarget(ekoPlayer.transform);
+
+            // Nix goes ghost: frozen in place, invulnerable, translucent, crouched pose.
+            EnterGhostMode();
         }
 
-        void UpdateWhilePossessing()
+        /// <summary>Hand control back to Nix, leaving Eko frozen where it is with its current aim.
+        /// Any arrow Eko was carrying goes back to Nix in the same beat.</summary>
+        void FreezeAndReturn()
         {
-            TryGrabArrow();
+            _possessing = false;
+            ekoInput.routed = false;
+            input.routed = true;
 
-            if (ekoInput.NixBowPressed)
-                EndPossession(vanish: !player.GroundedForRecoil);
+            eko.FreezeInPlace();
+            HandBackCarriedArrow();
+            ExitGhostMode();
+            FollowTarget(player.transform);
         }
 
-        /// <summary>Walk Eko close enough to Nix's last fired (and still down) arrow to grab it —
-        /// held until the possession ends, then handed to Nix.</summary>
+        /// <summary>R2 shortcut during possession: freeze + return + fire immediately, so the
+        /// player can commit an aimed shot without the L1-then-L1 double beat.</summary>
+        void FireImmediate()
+        {
+            // Same wind-down as FreezeAndReturn, but the aim we fire on is whatever's live *now*
+            // (before we mark HasAim off). Force HasAim on so a straight R2 mash with no aim still
+            // fires along the default direction — the player asked to shoot, honour it.
+            _possessing = false;
+            ekoInput.routed = false;
+            input.routed = true;
+
+            eko.FreezeInPlace();
+            HandBackCarriedArrow();
+            ExitGhostMode();
+            FollowTarget(player.transform);
+
+            FirePhantom();
+        }
+
+        /// <summary>Nix-side L1 on a planted phantom: fire if it was aimed, otherwise just return.</summary>
+        void FireOrReturnPhantom()
+        {
+            if (eko.HasAim) FirePhantom();
+            else eko.DismissWithOrb();
+        }
+
+        void FirePhantom()
+        {
+            eko.Loose(bow.ArrowSpeed(), player.Col);
+            eko.DismissWithOrb();
+        }
+
+        // ------------------------------------------------------------------ Nix ghost mode
+        void EnterGhostMode()
+        {
+            player.ForceGhostPose = true;
+            player.SetFrozen(true);
+            if (nixSprite != null)
+            {
+                if (!_nixColorCached) { _nixOriginalColor = nixSprite.color; _nixColorCached = true; }
+                var c = _nixOriginalColor; c.a = ghostAlpha;
+                nixSprite.color = c;
+            }
+            if (nixHealth != null) nixHealth.GrantInvuln(9999f);
+        }
+
+        void ExitGhostMode()
+        {
+            player.SetFrozen(false);
+            player.ForceGhostPose = false;
+            if (nixSprite != null && _nixColorCached) nixSprite.color = _nixOriginalColor;
+            // Clear the huge invuln grant — leave a normal short one so she isn't hit instantly on wake.
+            if (nixHealth != null) nixHealth.GrantInvuln(0.3f);
+        }
+
+        // ------------------------------------------------------------------ helpers
+        /// <summary>Snap Eko's body to <paramref name="pos"/> facing <paramref name="facing"/> at
+        /// a dead stop — the transform, the interpolated rigidbody, and the state machine.</summary>
+        void SnapEkoBody(Vector3 pos, int facing)
+        {
+            ekoPlayer.SetFrozen(false);   // just in case a previous dismiss left it suspended
+            if (ekoPlayer.Rb != null) ekoPlayer.Rb.position = pos;
+            ekoPlayer.transform.position = pos;
+            ekoPlayer.Velocity = Vector2.zero;
+            ekoPlayer.SetFacing(facing);
+            ekoPlayer.Machine.ChangeState(ekoPlayer.Idle);
+        }
+
         void TryGrabArrow()
         {
             if (_carryingArrow) return;
@@ -121,31 +294,13 @@ namespace NixAndEko.Combat
             Particle.Burst(center, Palette.Blue, 10, 5f);
         }
 
-        /// <summary>
-        /// End the possession. <paramref name="vanish"/> true means Nix wasn't grounded to receive
-        /// Eko, so the phantom is yanked out on the spot instead of flying home cleanly. Either way
-        /// a carried arrow is handed back — losing the clean return is punishment enough without
-        /// also stranding Nix out of ammo.
-        /// </summary>
-        void EndPossession(bool vanish)
+        void HandBackCarriedArrow()
         {
-            _possessing = false;
-            ekoInput.routed = false;
-            input.routed = true;
-
-            if (_carryingArrow)
-            {
-                bow.GiveArrow(false);
-                _carryingArrow = false;
-            }
-
-            if (vanish) eko.Vanish();
-            else eko.DismissWithOrb();
-
-            FollowTarget(player.transform);
+            if (!_carryingArrow) return;
+            bow.GiveArrow(false);
+            _carryingArrow = false;
         }
 
-        /// <summary>The arrow's true visual centre — its rendered bounds, not the nock-pivoted transform.</summary>
         static Vector3 ArrowCenter(Arrow arrow)
         {
             if (arrow == null) return Vector3.zero;
@@ -164,8 +319,16 @@ namespace NixAndEko.Combat
 
         void OnDisable()
         {
-            // Never leave the game soft-locked with Nix's input permanently muted.
-            if (_possessing) EndPossession(vanish: true);
+            // Never leave the game soft-locked with Nix's input muted or her sprite ghosted.
+            if (_possessing)
+            {
+                _possessing = false;
+                if (ekoInput != null) ekoInput.routed = false;
+                if (input != null) input.routed = true;
+                ExitGhostMode();
+                if (eko != null && eko.Active) eko.Vanish();
+            }
+            _fetching = false;
         }
     }
 }
