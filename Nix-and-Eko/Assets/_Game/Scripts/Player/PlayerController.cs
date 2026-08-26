@@ -94,7 +94,7 @@ namespace NixAndEko.Player
             get
             {
                 if (_bow == null) _bow = GetComponentInChildren<Combat.Bow>();
-                return _bow != null && _bow.HasArrow;
+                return _bow != null && _bow.HasAnyArrow;
             }
         }
         /// <summary>Which combo swing (0-2) the melee state is currently showing — read by the animator.</summary>

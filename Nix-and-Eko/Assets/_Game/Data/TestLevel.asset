@@ -535,6 +535,30 @@ MonoBehaviour:
     linkId: 0
     minCharge: 0.5
     openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: -92, y: -4.5}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 9
+    position: {x: -46, y: -4.5}
+    size: {x: 1, y: 0.9}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: -48, y: 8}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
   - type: 0
     position: {x: -8, y: 4}
     size: {x: 2, y: 26}
@@ -770,6 +794,62 @@ MonoBehaviour:
   - type: 3
     position: {x: 34, y: 2.8}
     size: {x: 6, y: 0.6}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: 12, y: -4.5}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 9
+    position: {x: 13, y: 6.9}
+    size: {x: 1, y: 0.9}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: 28, y: 17}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 9
+    position: {x: 52, y: 16.9}
+    size: {x: 1, y: 0.9}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: 30, y: 3}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: 55, y: 3}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 9
+    position: {x: 68, y: 8.9}
+    size: {x: 1, y: 0.9}
     patrolOffset: {x: 4, y: 0}
     speed: 3
     linkId: 0

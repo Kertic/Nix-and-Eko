@@ -258,12 +258,12 @@ namespace NixAndEko.Level
             sr.sortingOrder = 9;
             var ps = go.AddComponent<ProceduralSprite>();
             ps.shape = ProceduralSprite.Shape.Arrow;
-            ps.primary = new Color(0.9f, 0.85f, 0.6f);
-            ps.secondary = Palette.LightGrey;
-            ps.pixelsX = 16; ps.pixelsY = 6;
+            ps.primary = new Color(0.5f, 0.53f, 0.6f);      // sleek steel shaft
+            ps.secondary = new Color(0.93f, 0.95f, 1f);     // bright head + fletch
+            ps.pixelsX = 20; ps.pixelsY = 7;
 
             go.AddComponent<Rigidbody2D>();
-            go.AddComponent<BoxCollider2D>().size = new Vector2(1.0f, 0.35f);
+            go.AddComponent<BoxCollider2D>().size = new Vector2(1.1f, 0.22f);
             return go.AddComponent<Arrow>();
         }
     }

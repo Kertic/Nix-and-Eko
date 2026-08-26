@@ -53,6 +53,8 @@ namespace NixAndEko.Player
 
         /// <summary>The frame the Nix Bow button (R2 / LMB) went down — fires the shot, or sends Eko to fetch when empty.</summary>
         public bool NixBowPressed { get; private set; }
+        /// <summary>True while the Nix Bow button is held — used to charge a forced Eko fetch when the phantom is out.</summary>
+        public bool NixBowHeld { get; private set; }
         /// <summary>The frame the Eko button (L1 / Q) went down — plants / prepares / fires / returns the phantom.</summary>
         public bool EkoPressed { get; private set; }
         /// <summary>The frame the Nix Melee button (R1 / RMB) went down — melee combo, or a roll when unarmed.</summary>
@@ -98,7 +100,7 @@ namespace NixAndEko.Player
             actions?.FindActionMap("Player")?.Disable();
             AimStickActive = false;
             GlideHeld = false;
-            NixBowPressed = EkoPressed = MeleePressed = false;
+            NixBowPressed = NixBowHeld = EkoPressed = MeleePressed = false;
         }
 
         void Update()
@@ -110,6 +112,7 @@ namespace NixAndEko.Player
             GlideHeld = _glide != null && _glide.IsPressed();
 
             NixBowPressed = _nixBow != null && _nixBow.WasPressedThisFrame();
+            NixBowHeld = _nixBow != null && _nixBow.IsPressed();
             EkoPressed = _eko != null && _eko.WasPressedThisFrame();
             MeleePressed = _melee != null && _melee.WasPressedThisFrame();
 

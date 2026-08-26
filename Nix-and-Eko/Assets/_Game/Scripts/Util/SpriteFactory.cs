@@ -121,8 +121,11 @@ namespace NixAndEko.Util
             return ToSprite(tex);
         }
 
-        /// <summary>A thin arrow/bolt shape pointing +X.</summary>
-        public static Sprite Arrow(Color shaft, Color head, int w = 16, int h = 6)
+        /// <summary>
+        /// A sleek dart pointing +X: a thin 1px shaft, a long tapered arrowhead, and a small swept
+        /// fletching at the nock — reads as a dart rather than a chunky bolt.
+        /// </summary>
+        public static Sprite Arrow(Color shaft, Color head, int w = 18, int h = 7)
         {
             var tex = NewTex(w, h);
             for (int y = 0; y < h; y++)
@@ -130,19 +133,33 @@ namespace NixAndEko.Util
                 tex.SetPixel(x, y, Color.clear);
 
             int midY = h / 2;
-            // shaft
-            for (int x = 0; x < w - 4; x++)
+
+            // Long tapered head: about the front third, widening from the tip back to a base.
+            int headLen = Mathf.Clamp(Mathf.RoundToInt(w * 0.32f), 4, w - 4);
+            int headStart = w - headLen;
+            // Keep the head base slim (not the full sprite height) so it reads as a sleek dart tip.
+            int maxHalf = Mathf.Clamp((h - 1) / 2, 1, 2);
+            for (int x = headStart; x < w; x++)
             {
-                tex.SetPixel(x, midY, shaft);
-                if (h > 4) tex.SetPixel(x, midY - 1, shaft);
+                float f = (float)(x - headStart) / Mathf.Max(1, w - 1 - headStart); // 0 at base → 1 at tip
+                int half = Mathf.RoundToInt((1f - f) * maxHalf);
+                for (int y = midY - half; y <= midY + half; y++)
+                    if (y >= 0 && y < h) tex.SetPixel(x, y, head);
             }
-            // arrowhead triangle
-            for (int i = 0; i < 4; i++)
-                for (int y = midY - i; y <= midY - 1 + i; y++)
-                    if (y >= 0 && y < h) tex.SetPixel(w - 4 + i, y, head);
+
+            // Thin single-pixel shaft from the nock up to the head base.
+            for (int x = 1; x < headStart; x++)
+                tex.SetPixel(x, midY, shaft);
+
+            // Swept fletching at the nock: a couple of pixels flaring out above and below.
+            tex.SetPixel(0, midY, shaft);
+            if (midY + 1 < h) tex.SetPixel(1, midY + 1, head);
+            if (midY - 1 >= 0) tex.SetPixel(1, midY - 1, head);
+            if (midY + 1 < h) tex.SetPixel(0, midY + 1, head);
+            if (midY - 1 >= 0) tex.SetPixel(0, midY - 1, head);
 
             tex.Apply();
-            return ToSprite(tex, new Vector2(0.15f, 0.5f)); // pivot near the nock
+            return ToSprite(tex, new Vector2(0.1f, 0.5f)); // pivot near the nock
         }
 
         static Texture2D NewTex(int w, int h)

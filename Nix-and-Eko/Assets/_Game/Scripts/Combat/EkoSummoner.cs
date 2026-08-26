@@ -39,8 +39,13 @@ namespace NixAndEko.Combat
         public float assistMinDistance = 1.5f;
 
         [Header("Fetch")]
-        [Tooltip("Seconds for the fetch orb to reach the downed arrow (and again to zip back).")]
-        public float fetchHop = 0.18f;
+        [Tooltip("Speed (units/sec) the fetch orb zips out to the arrow and back.")]
+        public float fetchSpeed = 26f;
+        [Tooltip("How close (world units) the orb must get to the arrow's centre before it grabs it.")]
+        public float fetchArrive = 0.2f;
+        [Tooltip("Hold the Nix Bow button this long, while a phantom is out and Nix is empty, to " +
+                 "force the phantom home and fetch the arrow anyway (a QOL 'L1 then R2' shortcut).")]
+        public float fetchChargeTime = 0.6f;
 
         /// <summary>False once a phantom has been summoned, until Nix next touches the ground.</summary>
         public bool CanSummon => !_spent;
@@ -48,6 +53,7 @@ namespace NixAndEko.Combat
         bool _spent;
         bool _lingering;   // phantom fired mid-air and is standing until Nix lands
         bool _fetching;    // an orb fetch is in flight
+        float _fetchCharge; // seconds the forced-fetch hold has been building
 
         void Awake()
         {
@@ -80,21 +86,30 @@ namespace NixAndEko.Combat
 
             if (!eko.Active)
             {
-                if (CanSummon) Summon();
+                // Can't plant a phantom while Eko is off retrieving an arrow.
+                if (CanSummon && !_fetching) Summon();
                 return;
             }
 
-            // Phantom is out: a prepared shot fires (and returns/lingers); a shot-less one just returns.
+            ReturnPhantom();
+        }
+
+        /// <summary>The L1-on-an-active-phantom behaviour: a prepared shot fires (and then returns or
+        /// lingers airborne); a shot-less phantom just returns.</summary>
+        void ReturnPhantom()
+        {
             if (eko.Prepared) FirePhantom();
             else eko.DismissWithOrb();
         }
 
         void Summon()
         {
+            // Never plant a phantom while Eko is off retrieving an arrow.
+            if (_fetching) return;
             _spent = true;
             _lingering = false;
             // A phantom copies a shot only when Nix is actually holding a fireable, aimed arrow.
-            bool prepared = bow.IsAiming && bow.HasArrow;
+            bool prepared = bow.IsAiming && bow.HasAnyArrow;
             eko.Summon(player.transform.position, bow.AimDirection, player.Facing,
                        player.groundMask, prepared);
         }
@@ -112,36 +127,101 @@ namespace NixAndEko.Combat
 
         void HandleFetchButton()
         {
-            if (!input.NixBowPressed || bow.HasArrow || _fetching) return;
+            // Fetch only matters while Nix has nothing to fire (otherwise R2 fires her arrow).
+            if (bow.HasAnyArrow || _fetching) { _fetchCharge = 0f; return; }
 
-            // A phantom out on a setup is occupied — flash instead of running the errand.
-            if (eko.Active) { eko.FlashBusy(); return; }
+            if (eko.Active)
+            {
+                // A phantom out on a setup is occupied — flash on the press to say so. But holding
+                // R2 charges the phantom up and then forces the whole "L1 to return, R2 to fetch"
+                // combo, so the player doesn't have to interrupt the setup by hand. Grounded only.
+                if (input.NixBowPressed) eko.FlashBusy();
 
-            // Airborne, or nothing to fetch: no retrieval.
+                if (input.NixBowHeld && player.GroundedForRecoil)
+                {
+                    _fetchCharge += Time.deltaTime;
+                    eko.ChargeVis = _fetchCharge / Mathf.Max(0.01f, fetchChargeTime);
+                    if (_fetchCharge >= fetchChargeTime)
+                    {
+                        _fetchCharge = 0f;
+                        ForceFetchFromPhantom();
+                    }
+                }
+                else _fetchCharge = 0f;
+                return;
+            }
+
+            _fetchCharge = 0f;
+            if (input.NixBowPressed) TryStartFetch();
+        }
+
+        /// <summary>Send Eko out on the orb fetch, if there's a downed arrow to grab and Nix is grounded.</summary>
+        void TryStartFetch()
+        {
+            if (bow.HasAnyArrow || _fetching) return;
             if (!player.GroundedForRecoil) return;
             Arrow arrow = bow.LastFiredArrow;
             if (arrow == null) return;
-
-            StartFetch(arrow);
+            StartFetch(player.transform.position, arrow);
         }
 
-        /// <summary>Orb out to the downed arrow, then orb back to hand it over.</summary>
-        void StartFetch(Arrow arrow)
+        /// <summary>
+        /// The held-R2 override: the phantom looses its prepared shot (if any) and then, instead of
+        /// zipping home first, collapses into the fetch orb right where it stood and zooms out to
+        /// the arrow before returning to Nix — one continuous path, never two orbs crossing.
+        /// </summary>
+        void ForceFetchFromPhantom()
+        {
+            Vector3 ekoPos = eko.transform.position;
+            FirePhantomShotOnly();   // loose a prepared shot, if there is one — no separate return orb
+            eko.Dismiss();           // silent: the fetch orb below is the phantom's only exit visual
+
+            if (bow.HasAnyArrow || _fetching) return;
+            if (!player.GroundedForRecoil) return;
+            Arrow arrow = bow.LastFiredArrow;
+            if (arrow == null) return;
+            StartFetch(ekoPos, arrow);
+        }
+
+        /// <summary>Loose the phantom's prepared shot without dismissing it or spawning a return orb.</summary>
+        void FirePhantomShotOnly()
+        {
+            if (!eko.Prepared) return;
+            Transform homeTarget = PlayerOnPreviewLine() ? player.transform : null;
+            eko.Loose(bow.ArrowSpeed(), 1f, player.Col, homeTarget);
+        }
+
+        /// <summary>
+        /// Orb out from <paramref name="from"/> to the downed arrow — homing onto its live visual
+        /// centre so it always makes contact instead of stopping short at the nock-pivoted transform
+        /// — grab it, then orb back to hand it over to Nix.
+        /// </summary>
+        void StartFetch(Vector3 from, Arrow arrow)
         {
             _fetching = true;
             bool wasBlue = arrow.blue;
-            Vector3 arrowPos = arrow.transform.position;
-            Vector3 nixPos = player.transform.position;
 
-            EkoOrb.Fly(nixPos, arrowPos, fetchHop, onArrive: () =>
+            EkoOrb.Chase(from, () => ArrowCenter(arrow), fetchSpeed, fetchArrive,
+                onArrive: () =>
             {
+                Vector3 grabAt = arrow != null ? ArrowCenter(arrow) : player.transform.position;
                 if (arrow != null) Destroy(arrow.gameObject);
-                EkoOrb.Fly(arrowPos, player.transform.position, fetchHop, onArrive: () =>
+
+                EkoOrb.Chase(grabAt, () => player.transform.position, fetchSpeed, fetchArrive,
+                    onArrive: () =>
                 {
                     bow.GiveArrow(wasBlue);
                     _fetching = false;
                 });
             });
+        }
+
+        /// <summary>The arrow's true visual centre — its rendered bounds, not the nock-pivoted transform.</summary>
+        static Vector3 ArrowCenter(Arrow arrow)
+        {
+            if (arrow == null) return Vector3.zero;
+            var sr = arrow.GetComponentInChildren<SpriteRenderer>();
+            return sr != null ? sr.bounds.center : arrow.transform.position;
         }
 
         /// <summary>
@@ -166,6 +246,7 @@ namespace NixAndEko.Combat
             if (eko != null && eko.Active) eko.Dismiss();
             _lingering = false;
             _fetching = false;
+            _fetchCharge = 0f;
         }
     }
 }

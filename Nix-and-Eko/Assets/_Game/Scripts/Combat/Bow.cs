@@ -79,11 +79,15 @@ namespace NixAndEko.Combat
         /// <summary>The current snapped aim direction (unit vector).</summary>
         public Vector2 AimDirection { get; private set; } = Vector2.right;
 
-        /// <summary>Does Nix currently hold her arrow (ready to fire)?</summary>
-        public bool HasArrow { get; private set; } = true;
-        /// <summary>Is the held arrow one of Eko's (drawn blue)?</summary>
-        public bool ArrowIsBlue { get; private set; }
-        /// <summary>The last arrow Nix fired that's now lying in the world to be reclaimed (null once picked up / gone).</summary>
+        /// <summary>Does Nix hold her own physical arrow (retrievable once fired)?</summary>
+        public bool HasNormalArrow { get; private set; } = true;
+        /// <summary>Does Nix hold one of Eko's blue arrows (spent on use, never retrievable)?</summary>
+        public bool HasBlueArrow { get; private set; }
+        /// <summary>Can Nix fire at all (either slot)?</summary>
+        public bool HasAnyArrow => HasNormalArrow || HasBlueArrow;
+        /// <summary>A blue arrow fires first when both slots are stocked, so this is what the next shot will be.</summary>
+        public bool FiresBlueNext => HasBlueArrow;
+        /// <summary>The last <em>normal</em> arrow Nix fired that's now lying in the world to be reclaimed (null once picked up / gone).</summary>
         public Arrow LastFiredArrow { get; private set; }
 
         Camera _cam;
@@ -127,7 +131,7 @@ namespace NixAndEko.Combat
 
             UpdateIndicator(IsAiming);
 
-            if (input.NixBowPressed && HasArrow)
+            if (input.NixBowPressed && HasAnyArrow)
                 Fire(AimDirection);
         }
 
@@ -215,8 +219,8 @@ namespace NixAndEko.Combat
                     aimIndicator.position = Origin + (Vector3)AimDirection * indicatorDistance;
                     aimIndicator.right = AimDirection;
                     if (aimIndicatorRenderer != null)
-                        aimIndicatorRenderer.color = !HasArrow ? noAmmoColor
-                                                   : ArrowIsBlue ? blueColor : readyColor;
+                        aimIndicatorRenderer.color = !HasAnyArrow ? noAmmoColor
+                                                   : FiresBlueNext ? blueColor : readyColor;
                 }
             }
 
@@ -233,7 +237,7 @@ namespace NixAndEko.Combat
         {
             if (trajectory == null) return;
 
-            if (!IsAiming || !HasArrow)
+            if (!IsAiming || !HasAnyArrow)
             {
                 trajectory.positionCount = 0;
                 HidePassThroughMarkers();
@@ -288,7 +292,7 @@ namespace NixAndEko.Combat
             trajectory.positionCount = count;
             HidePassThroughMarkers(markerCount);
 
-            Color c = ArrowIsBlue ? blueColor : readyColor;
+            Color c = FiresBlueNext ? blueColor : readyColor;
             trajectory.startColor = c;
             trajectory.endColor = new Color(c.r, c.g, c.b, 0f); // fade out toward the end
         }
@@ -312,13 +316,19 @@ namespace NixAndEko.Combat
         // -------------------------------------------------------------------- Arrow inventory
         public float ArrowSpeed() => arrowSpeed;
 
-        /// <summary>Hand Nix an arrow back — from a walk-over pickup, an Eko fetch, or an Eko-arrow
-        /// catch. <paramref name="blue"/> marks it as one of Eko's arrows (drawn blue).</summary>
+        /// <summary>Hand Nix an arrow back. <paramref name="blue"/> fills the blue slot (an Eko arrow,
+        /// spent on use); otherwise the normal slot (her own physical arrow). The two slots are
+        /// independent, so an Eko-arrow catch grants a bonus blue shot without disturbing her normal
+        /// arrow's state — down in the world or in hand.
+        ///
+        /// This does NOT touch <see cref="LastFiredArrow"/>: an Eko-arrow catch happens while her
+        /// real arrow is still down and must stay the fetch target; and when a walk-over / fetch
+        /// reclaim calls this, the reclaimed arrow is destroyed in the same breath, so
+        /// <see cref="LastFiredArrow"/> naturally reads as null without an explicit clear.</summary>
         public void GiveArrow(bool blue)
         {
-            HasArrow = true;
-            ArrowIsBlue = blue;
-            LastFiredArrow = null;
+            if (blue) HasBlueArrow = true;
+            else HasNormalArrow = true;
         }
 
         /// <summary>
@@ -335,20 +345,28 @@ namespace NixAndEko.Combat
                 return;
             }
 
+            // A blue arrow fires first when both slots are stocked, and is spent on use.
+            bool blue = FiresBlueNext;
+
             Quaternion rot = Quaternion.FromToRotation(Vector3.right, aimDir);
             Arrow arrow = Instantiate(arrowPrefab, Origin, rot); // origin = player center, matches the arc preview
             arrow.gameObject.SetActive(true); // template may be inactive; copies must run
 
-            arrow.SetNixArrow(this, player != null ? player.Col : null, ArrowIsBlue);
+            arrow.SetNixArrow(this, player != null ? player.Col : null, blue);
             arrow.Launch(aimDir * arrowSpeed, 1f);
             ApplyRecoil(aimDir, 1f);
 
-            // A blue (Eko's) arrow is spent on use — never a pickup and never an Eko-fetch target,
-            // and firing it must not clobber the reference to Nix's real downed arrow still out in
-            // the world (the Eko-catch flow), which stays the fetch target.
-            if (!arrow.blue) LastFiredArrow = arrow;
-            HasArrow = false;
-            ArrowIsBlue = false;
+            if (blue)
+            {
+                // Blue arrow spent — never a pickup, never a fetch target, and the normal slot
+                // (in hand or down in the world) is left exactly as it was.
+                HasBlueArrow = false;
+            }
+            else
+            {
+                LastFiredArrow = arrow;
+                HasNormalArrow = false;
+            }
         }
 
         // -------------------------------------------------------------------- Recoil

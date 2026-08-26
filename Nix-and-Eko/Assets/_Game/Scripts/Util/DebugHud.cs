@@ -28,9 +28,11 @@ namespace NixAndEko.Util
             if (health != null) GUILayout.Label($"HP: {health.Current}", style);
             if (player != null) GUILayout.Label($"State: {player.currentState}", style);
             if (bow != null)
-                GUILayout.Label(bow.HasArrow
-                    ? (bow.ArrowIsBlue ? "Bow: ready (Eko's arrow)" : "Bow: ready")
-                    : "Bow: empty - pick up your arrow / R2 to fetch", style);
+                GUILayout.Label(!bow.HasAnyArrow
+                    ? "Bow: empty - pick up your arrow / R2 to fetch"
+                    : bow.FiresBlueNext
+                        ? (bow.HasNormalArrow ? "Bow: blue arrow ready (normal held too)" : "Bow: blue arrow ready")
+                        : "Bow: ready", style);
             GUILayout.Label("Keyboard: A/D move  Space jump  C crouch", style);
             GUILayout.Label("  Mouse aims. LMB = Nix Bow, RMB = Nix Melee, Q = Eko", style);
             GUILayout.Label("Gamepad: stick/d-pad move  X jump  O crouch", style);

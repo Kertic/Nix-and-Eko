@@ -6,6 +6,7 @@ using NixAndEko.Level;
 using NixAndEko.Player;
 using NixAndEko.Util;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -36,6 +37,55 @@ namespace NixAndEko.EditorTools
                 Debug.Log("[Builder] Created " + LevelPath);
             }
             BuildScene(level);
+        }
+
+        /// <summary>
+        /// Create a clean scene that builds the level from code at launch (a <see cref="LevelLoader"/>
+        /// plus a camera), instead of baking every GameObject into the scene. Playing this scene
+        /// always reflects the current scripts — no more rebuilding the scene after code changes.
+        /// </summary>
+        [MenuItem("Tools/Nix & Eko/Setup Runtime Scene (builds on Play)", priority = 2)]
+        public static void SetupRuntimeScene()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+
+            LevelData level = AssetDatabase.LoadAssetAtPath<LevelData>(LevelPath);
+            if (level == null)
+            {
+                level = GenerateTestLevel();
+                EnsureDataFolder();
+                AssetDatabase.CreateAsset(level, LevelPath);
+                AssetDatabase.SaveAssets();
+            }
+            PlayerConfig config = LoadOrCreateConfig();
+            var inputAsset = AssetDatabase.LoadAssetAtPath<InputActionAsset>(InputAssetPath);
+            EnsureLayer("Ground");
+
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+
+            // 2D game: drop the default directional light, and let LevelLoader finish framing the camera.
+            var light = GameObject.Find("Directional Light");
+            if (light != null) Object.DestroyImmediate(light);
+
+            var boot = new GameObject("Bootstrap");
+            var loader = boot.AddComponent<LevelLoader>();
+            loader.level = level;
+            loader.playerConfig = config;
+            loader.inputActions = inputAsset;
+
+            if (!AssetDatabase.IsValidFolder("Assets/Scenes")) AssetDatabase.CreateFolder("Assets", "Scenes");
+            string scenePath = "Assets/Scenes/Game.unity";
+            EditorSceneManager.SaveScene(scene, scenePath);
+
+            // Make it the scene that plays from the editor's Play button.
+            var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            if (!scenes.Exists(s => s.path == scenePath))
+                scenes.Insert(0, new EditorBuildSettingsScene(scenePath, true));
+            EditorBuildSettings.scenes = scenes.ToArray();
+
+            Debug.Log("[Builder] Created runtime scene at " + scenePath +
+                      ". Press Play — the level is rebuilt from code every launch, so script changes " +
+                      "(phantom visuals, tuning, etc.) always take effect without rebuilding the scene.");
         }
 
         [MenuItem("Tools/Nix & Eko/Regenerate Test Level Asset", priority = 1)]
@@ -217,6 +267,9 @@ namespace NixAndEko.EditorTools
             Block(BlockType.Checkpoint, -56f, -4.5f, 1f, 2f);
             Block(BlockType.EnemyWalker, -62f, -4.5f, 0.9f, 1f);   // paces the start plateau
             Block(BlockType.EnemySlammer, -16f, -4.5f, 1f, 0.9f);  // pounds the step-down ledge
+            Block(BlockType.EnemyWalker, -92f, -4.5f, 0.9f, 1f);   // the long connector run
+            Block(BlockType.EnemySlammer, -46f, -4.5f, 1f, 0.9f);  // guards the plateau
+            Block(BlockType.EnemyWalker, -48f, 8f, 0.9f, 1f);      // patrols the upper shelf
 
             // ---------------- Zone 2: wall-slide descent ----------------
             Block(BlockType.Ground, -8f, 4f, 2f, 26f);          // tall left wall
@@ -290,6 +343,15 @@ namespace NixAndEko.EditorTools
             Block(BlockType.Ground, 52f, 2f, 14f, 1f);
             Block(BlockType.Checkpoint, 50f, 3.5f, 1f, 2f);
             Block(BlockType.Hazard, 34f, 2.8f, 6f, 0.6f);
+
+            // ---------------- Enemies scattered through the later zones ----------------
+            Block(BlockType.EnemyWalker, 12f, -4.5f, 0.9f, 1f);    // recoil-shaft floor
+            Block(BlockType.EnemySlammer, 13f, 6.9f, 1f, 0.9f);    // a shaft pogo ledge
+            Block(BlockType.EnemyWalker, 28f, 17f, 0.9f, 1f);      // hazard gauntlet
+            Block(BlockType.EnemySlammer, 52f, 16.9f, 1f, 0.9f);   // gauntlet far platform
+            Block(BlockType.EnemyWalker, 30f, 3f, 0.9f, 1f);       // breakable vault floor
+            Block(BlockType.EnemyWalker, 55f, 3f, 0.9f, 1f);       // east vault floor
+            Block(BlockType.EnemySlammer, 68f, 8.9f, 1f, 0.9f);    // reward ledge past the gate
 
             d.blocks = b;
             return d;

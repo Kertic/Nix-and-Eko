@@ -20,9 +20,12 @@ namespace NixAndEko.Combat
         Action _onArrive;
         bool _burstOnArrive;
 
-        /// <summary>Spawn an orb travelling <paramref name="from"/> → <paramref name="to"/> over <paramref name="duration"/> seconds.</summary>
-        public static EkoOrb Fly(Vector3 from, Vector3 to, float duration = 0.18f,
-                                 Action onArrive = null, bool burstOnArrive = true)
+        // Chase mode: home onto a live target until within arrival distance.
+        bool _chase;
+        Func<Vector3> _target;
+        float _speed, _arrive, _timeout;
+
+        static GameObject NewOrb(Vector3 from)
         {
             var go = new GameObject("EkoOrb");
             go.transform.position = from;
@@ -32,33 +35,78 @@ namespace NixAndEko.Combat
             sr.sortingOrder = 25;
             sr.sprite = SpriteFactory.SolidRect(Blue, 8, 8, Blue);
             sr.color = Blue;
+            Particle.Burst(from, Blue, 8, 5f, 0.3f, 0.5f);
+            return go;
+        }
 
+        /// <summary>Spawn an orb travelling <paramref name="from"/> → <paramref name="to"/> over <paramref name="duration"/> seconds.</summary>
+        public static EkoOrb Fly(Vector3 from, Vector3 to, float duration = 0.18f,
+                                 Action onArrive = null, bool burstOnArrive = true)
+        {
+            var go = NewOrb(from);
             var orb = go.AddComponent<EkoOrb>();
-            orb._sr = sr;
+            orb._sr = go.GetComponent<SpriteRenderer>();
             orb._from = from;
             orb._to = to;
             orb._dur = Mathf.Max(0.01f, duration);
             orb._onArrive = onArrive;
             orb._burstOnArrive = burstOnArrive;
-            Particle.Burst(from, Blue, 8, 5f, 0.3f, 0.5f);
+            return orb;
+        }
+
+        /// <summary>
+        /// Spawn an orb that homes onto a <em>live</em> target (re-read each frame) at
+        /// <paramref name="speed"/> units/sec and fires <paramref name="onArrive"/> only once it's
+        /// within <paramref name="arriveDist"/> of it — so a fetch always actually reaches the arrow's
+        /// centre before grabbing it, never stopping short. A timeout guarantees it still completes.
+        /// </summary>
+        public static EkoOrb Chase(Vector3 from, Func<Vector3> target, float speed = 24f,
+                                   float arriveDist = 0.2f, float timeout = 3f, Action onArrive = null)
+        {
+            var go = NewOrb(from);
+            var orb = go.AddComponent<EkoOrb>();
+            orb._sr = go.GetComponent<SpriteRenderer>();
+            orb._chase = true;
+            orb._target = target;
+            orb._speed = Mathf.Max(0.1f, speed);
+            orb._arrive = Mathf.Max(0.02f, arriveDist);
+            orb._timeout = Mathf.Max(0.1f, timeout);
+            orb._onArrive = onArrive;
+            orb._burstOnArrive = true;
             return orb;
         }
 
         void Update()
         {
-            _age += Time.unscaledDeltaTime;
+            float dt = Time.unscaledDeltaTime;
+
+            if (_chase)
+            {
+                _age += dt;
+                Vector3 goal = _target != null ? _target() : transform.position;
+                transform.position = Vector3.MoveTowards(transform.position, goal, _speed * dt);
+                transform.localScale = Vector3.one * (0.45f + 0.1f * Mathf.Sin(Time.unscaledTime * 20f));
+
+                if (Vector3.Distance(transform.position, goal) <= _arrive || _age >= _timeout)
+                    Arrive(transform.position);
+                return;
+            }
+
+            _age += dt;
             float t = Mathf.Clamp01(_age / _dur);
             // Ease-in-out so the hop reads as a deliberate zip, not a linear slide.
             float e = t * t * (3f - 2f * t);
             transform.position = Vector3.Lerp(_from, _to, e);
             transform.localScale = Vector3.one * Mathf.Lerp(0.35f, 0.6f, Mathf.Sin(t * Mathf.PI));
 
-            if (t >= 1f)
-            {
-                if (_burstOnArrive) Particle.Burst(_to, Blue, 10, 6f, 0.35f, 0.6f);
-                _onArrive?.Invoke();
-                Destroy(gameObject);
-            }
+            if (t >= 1f) Arrive(_to);
+        }
+
+        void Arrive(Vector3 at)
+        {
+            if (_burstOnArrive) Particle.Burst(at, Blue, 10, 6f, 0.35f, 0.6f);
+            _onArrive?.Invoke();
+            Destroy(gameObject);
         }
     }
 }

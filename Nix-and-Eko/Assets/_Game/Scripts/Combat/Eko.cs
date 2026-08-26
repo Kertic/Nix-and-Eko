@@ -27,15 +27,20 @@ namespace NixAndEko.Combat
         [Tooltip("Small dot markers dropped wherever the preview crosses clean through a one-way platform instead of stopping there.")]
         public Transform[] passThroughMarkers;
 
-        [Header("Swap")]
-        [Tooltip("Seconds of freeze-frame when Nix shoots the phantom to swap places.")]
-        public float swapHitstop = 0.08f;
+        // Freeze-frame length (real seconds) when Nix shoots the phantom to swap places. A code
+        // constant rather than a serialized field so it always reflects the current value on
+        // recompile — a serialized field is baked into the scene's Eko at build time and would
+        // ignore code changes until the scene is rebuilt.
+        const float SwapHitstop = 0.2f;
 
         [Header("Look")]
         [Tooltip("How far the straight-shot preview reaches before giving up.")]
         public float previewDistance = 40f;
-        [Tooltip("Eko renders as a translucent blue echo of Nix's silhouette.")]
-        public Color tint = new Color(0.4f, 0.8f, 1f, 0.75f);
+        // A code constant (not serialized) so recompiles always apply — a serialized colour is
+        // baked into the scene's Eko at build time and would ignore edits until a scene rebuild.
+        static readonly Color tint = new Color(0.4f, 0.8f, 1f, 0.75f);
+        // Draw the echo in front of Nix (her sprite is 10) so it's always visible, even planted on her.
+        const int PhantomSortingOrder = 11;
         public Color previewColor = new Color(0.35f, 0.75f, 1f, 0.9f);
 
         /// <summary>True while a phantom is standing in the world.</summary>
@@ -47,6 +52,10 @@ namespace NixAndEko.Combat
 
         LayerMask _mask;
         float _busyFlash;   // seconds of "occupied" blink remaining
+
+        /// <summary>0..1 charge shown while Nix holds R2 to force this phantom home + fetch. Driven
+        /// each frame by <see cref="EkoSummoner"/>; falls back to 0 when it stops being set.</summary>
+        public float ChargeVis { get; set; }
 
         /// <summary>
         /// Plant the phantom, frozen at <paramref name="position"/> aiming along <paramref name="aim"/>.
@@ -63,11 +72,16 @@ namespace NixAndEko.Combat
 
             if (sprite != null)
             {
+                // Force the visual state in code every summon, so a scene whose Eko was baked with
+                // stale values (sorting order, hidden renderer, missing sprite) still shows.
                 sprite.enabled = true;
+                sprite.sortingOrder = PhantomSortingOrder;
+                if (sprite.sprite == null) sprite.sprite = ArcherSprites.IdleFrames[0];
                 sprite.color = tint;
-                Vector3 s = sprite.transform.localScale;
-                s.x = Mathf.Abs(s.x) * (facing >= 0 ? 1 : -1);
-                sprite.transform.localScale = s;
+
+                float mag = Mathf.Abs(sprite.transform.localScale.x);
+                if (mag < 0.01f) mag = 1f;
+                sprite.transform.localScale = new Vector3(mag * (facing >= 0 ? 1 : -1), 1f, 1f);
             }
 
             Active = true;
@@ -92,8 +106,13 @@ namespace NixAndEko.Combat
         {
             if (!Active || sprite == null) return;
 
-            // Occupied blink: pulse brighter, then settle back to the resting tint.
-            if (_busyFlash > 0f)
+            // Charging (Nix holding R2 to force a fetch) brightens steadily toward white; an
+            // occupied blink pulses; otherwise settle back to the resting tint.
+            if (ChargeVis > 0.001f)
+            {
+                sprite.color = Color.Lerp(tint, Color.white, Mathf.Clamp01(ChargeVis) * 0.85f);
+            }
+            else if (_busyFlash > 0f)
             {
                 _busyFlash -= Time.deltaTime;
                 float k = Mathf.PingPong(Time.time * 12f, 1f);
@@ -103,6 +122,9 @@ namespace NixAndEko.Combat
             {
                 sprite.color = tint;
             }
+
+            // Consumed each frame — the summoner re-sets it while the hold continues.
+            ChargeVis = 0f;
         }
 
         /// <summary>
@@ -239,7 +261,7 @@ namespace NixAndEko.Combat
             Vector3 nixPos = player.transform.position;
             Vector3 ekoPos = transform.position;
 
-            Hitstop.Freeze(swapHitstop);
+            Hitstop.Freeze(SwapHitstop);
 
             player.transform.position = ekoPos;
             player.Velocity = Vector2.zero;
