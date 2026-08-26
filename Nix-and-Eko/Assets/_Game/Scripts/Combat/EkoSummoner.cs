@@ -79,6 +79,10 @@ namespace NixAndEko.Combat
         Color _nixOriginalColor;
         bool _nixColorCached;
         Collider2D _ekoCol;
+        /// <summary>Nix's velocity at the moment she went ghost. Restored on ExitGhostMode so
+        /// summoning Eko mid-flight (running jump, air-shot recoil, etc.) doesn't kill her run
+        /// — she picks up exactly where she left off when control comes back.</summary>
+        Vector2 _nixCachedVelocity;
 
         void Awake()
         {
@@ -338,6 +342,10 @@ namespace NixAndEko.Combat
         // ------------------------------------------------------------------ Nix ghost mode
         void EnterGhostMode()
         {
+            // Snapshot Nix's velocity BEFORE SetFrozen zeroes it, so ExitGhostMode can hand it
+            // back and she resumes with whatever momentum she had at summon time.
+            _nixCachedVelocity = player.Velocity;
+
             player.ForceGhostPose = true;
             player.SetFrozen(true);
             player.SetIntangible(true);   // ghost Nix: nothing collides with her, nothing senses her
@@ -354,6 +362,13 @@ namespace NixAndEko.Combat
         {
             player.SetIntangible(false);
             player.SetFrozen(false);
+            // SetFrozen(false) zeroes velocity to wake cleanly — restore the pre-summon momentum
+            // AFTER it so a running/jumping Nix picks back up where she left off. Also drop her
+            // state machine into Fall if she was airborne when frozen, since Sense() hasn't run
+            // yet this frame and Idle would otherwise think she's grounded for one tick.
+            player.Velocity = _nixCachedVelocity;
+            if (_nixCachedVelocity.sqrMagnitude > 0.0001f)
+                player.Machine.ChangeState(_nixCachedVelocity.y > 0.01f ? (Core.IState)player.Jump : player.Fall);
             player.ForceGhostPose = false;
             if (nixSprite != null && _nixColorCached) nixSprite.color = _nixOriginalColor;
             // Clear the huge invuln grant — leave a normal short one so she isn't hit instantly on wake.
