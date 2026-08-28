@@ -5,12 +5,36 @@ using UnityEngine;
 
 namespace NixAndEko.Util
 {
-    /// <summary>Tiny IMGUI overlay for playtesting: shows health, state and controls. Remove for shipping.</summary>
+    /// <summary>
+    /// Tiny IMGUI overlay for playtesting: shows health, state and controls. Toggled from the
+    /// pause menu's Debug submenu; the preference persists in <see cref="PlayerPrefs"/>. Default
+    /// off so a fresh session doesn't have the readout pasted over the top of the game — turn it
+    /// on when you need it.
+    /// </summary>
     public class DebugHud : MonoBehaviour
     {
+        const string PrefKey = "NixEko.ShowDebugHud.v1";
+
+        /// <summary>Persisted user preference. Default off.</summary>
+        public static bool Enabled
+        {
+            get => PlayerPrefs.GetInt(PrefKey, 0) != 0;
+            set { PlayerPrefs.SetInt(PrefKey, value ? 1 : 0); PlayerPrefs.Save(); }
+        }
+
         public PlayerController player;
         public Health health;
         public Bow bow;
+
+        // Snapshot of Enabled for the current frame. OnGUI must NOT read the live PlayerPrefs
+        // value directly: Unity runs OnGUI in separate Layout and Repaint passes, and the pause
+        // menu's Debug page can flip Enabled (via a button click) in between them within the same
+        // frame — since this component has no explicit execution order it runs before PauseMenu,
+        // so Layout would see the old value (0 controls laid out) and Repaint the new one (a full
+        // BeginArea of controls), producing IMGUI's "control N's position in a group with only N
+        // controls" mismatch. Caching once in Update keeps both passes consistent. See the same
+        // class of bug documented on PauseMenu.GoToPage.
+        bool _enabledThisFrame;
 
         void Awake()
         {
@@ -19,8 +43,14 @@ namespace NixAndEko.Util
             if (bow == null && player != null) bow = player.GetComponentInChildren<Bow>();
         }
 
+        void Update()
+        {
+            _enabledThisFrame = Enabled;
+        }
+
         void OnGUI()
         {
+            if (!_enabledThisFrame) return;
             var style = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold };
             style.normal.textColor = Color.white;
 

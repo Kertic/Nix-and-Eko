@@ -110,6 +110,13 @@ namespace NixAndEko.Combat
 
         void Update()
         {
+            // Orbs run on unscaled time (so they still animate through a hitstop freeze), which
+            // means they'd also fly through a full pause menu — arriving mid-pause and calling
+            // onArrive to hand an arrow back or reform a phantom. Gate on the pause flag so a
+            // retrieval that was in flight when the player paused actually holds its position
+            // until they resume, matching what the rest of the world is doing.
+            if (NixAndEko.Environment.PauseMenu.IsGameplayPaused) return;
+
             float dt = Time.unscaledDeltaTime;
             _age += dt;
 

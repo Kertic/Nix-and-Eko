@@ -29,6 +29,8 @@ namespace NixAndEko.Level
         public bool spawnDebugHud = true;
         [Tooltip("Spawn the world map overlay (toggled with Select / M / Tab).")]
         public bool spawnMap = true;
+        [Tooltip("Spawn the pause menu (Start / Escape) with its Controls submenu.")]
+        public bool spawnPauseMenu = true;
 
         [Header("Scene-first mode (no LevelData asset)")]
         [Tooltip("Where the player starts when the level lives as scene GameObjects. Ignored " +
@@ -71,6 +73,15 @@ namespace NixAndEko.Level
                 if (spawnMap) AddMap(player);
             }
 
+            // Pause menu is independent of the player — it needs to work even before the player is
+            // built, but attaches after because it drives Time.timeScale that the player's freshly-
+            // running physics shouldn't stomp on a paused frame during construction.
+            if (spawnPauseMenu) AddPauseMenu();
+
+            // Floating state-name labels above every live PlayerController. One instance covers
+            // both Nix and Eko; the pause menu owns the on/off toggle (persisted to PlayerPrefs).
+            AddStateLabels();
+
             // Eko exists as a second PlayerController now (see PlayerFactory), so the camera needs
             // to be told explicitly who to follow rather than finding "the" PlayerController.
             if (configureCamera) ConfigureCamera(player, spawn);
@@ -99,6 +110,24 @@ namespace NixAndEko.Level
             // Second dot for Eko, if the summoner built one under the level root.
             var eko = transform.Find("Eko");
             if (eko != null) map.secondary = eko;
+        }
+
+        void AddStateLabels()
+        {
+            var go = new GameObject("PlayerStateLabels");
+            go.transform.SetParent(transform, false);
+            go.AddComponent<NixAndEko.Util.PlayerStateLabel>();
+        }
+
+        /// <summary>Attach the pause menu overlay. Reads the Pause action directly off the shared
+        /// InputActionAsset, so it fires while gameplay is muted (Nix's reader off during Eko
+        /// possession) and while Time.timeScale is 0.</summary>
+        void AddPauseMenu()
+        {
+            var go = new GameObject("PauseMenu");
+            go.transform.SetParent(transform, false);
+            var menu = go.AddComponent<NixAndEko.Environment.PauseMenu>();
+            menu.inputActions = inputActions;
         }
 
         void AddDebugHud(PlayerController player)

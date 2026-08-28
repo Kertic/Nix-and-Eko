@@ -109,7 +109,12 @@ namespace NixAndEko.Combat
             for (int i = 0; i < count; i++)
             {
                 float u = (count == 1) ? 0f : (float)i / (count - 1);
-                float deg = Mathf.Lerp(_startAngle, _endAngle, u) * _facing;
+                float deg = Mathf.Lerp(_startAngle, _endAngle, u);
+                // Reflect the arc around Nix's vertical axis when facing left, not just
+                // negate the angle. Negation gives the same set of angles in reverse order —
+                // the arc ends up drawn in the same physical location, just swept backwards.
+                // A real mirror is θ → 180° - θ (which flips cos, leaves sin alone).
+                if (_facing < 0) deg = 180f - deg;
                 float rad = deg * Mathf.Deg2Rad;
                 var p = new Vector3(Mathf.Cos(rad), Mathf.Sin(rad), 0f) * _radius;
                 _lr.SetPosition(i, _origin + p);

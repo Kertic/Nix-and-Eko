@@ -51,7 +51,7 @@ namespace NixAndEko.Player
         [Range(0.05f, 1f)]
         public float aimStickRelease = 0.35f;
 
-        InputAction _move, _aim, _glide, _eko, _nixBow, _melee, _jump, _crouch, _interact, _map;
+        InputAction _move, _aim, _glide, _eko, _nixBow, _melee, _jump, _crouch, _interact, _map, _pause;
 
         public Vector2 Move { get; private set; }
         /// <summary>Raw right-stick vector, deadzone applied by the Input System.</summary>
@@ -72,7 +72,7 @@ namespace NixAndEko.Player
         public bool NixBowPressed { get; private set; }
         /// <summary>True while the Nix Bow button is held.</summary>
         public bool NixBowHeld { get; private set; }
-        /// <summary>The frame the Eko button (L1 / Q) went down — plants Eko where Nix stands and
+        /// <summary>The frame the Eko button (Square / Q) went down — plants Eko where Nix stands and
         /// hands control to it.</summary>
         public bool EkoPressed { get; private set; }
         /// <summary>The frame the Nix Melee button (R1 / RMB) went down — melee combo, or a roll when unarmed.</summary>
@@ -86,6 +86,12 @@ namespace NixAndEko.Player
 
         /// <summary>The frame the Map button (Select / M / Tab) went down — toggles the world map.</summary>
         public bool MapPressed { get; private set; }
+
+        /// <summary>The frame the Pause button (Start / Escape) went down — toggles the pause menu.
+        /// Sampled through the Input System's own device state so it still fires while
+        /// <see cref="Time.timeScale"/> is 0 (the reader itself is timeScale-independent because
+        /// Unity keeps the Input System polling regardless of scaled time).</summary>
+        public bool PausePressed { get; private set; }
 
         void Awake()
         {
@@ -113,6 +119,7 @@ namespace NixAndEko.Player
             _crouch = map.FindAction("Crouch");
             _interact = map.FindAction("Interact");
             _map = map.FindAction("Map", throwIfNotFound: false);
+            _pause = map.FindAction("Pause", throwIfNotFound: false);
         }
 
         void OnEnable()
@@ -130,10 +137,15 @@ namespace NixAndEko.Player
 
         void Update()
         {
-            // Muted: someone else currently owns the physical input (see `routed`). Read nothing,
-            // report nothing — the actions themselves stay enabled (shared with whichever reader
-            // *is* routed right now), only this reader's outputs go neutral.
-            if (!routed)
+            // Muted: someone else currently owns the physical input (see `routed`), OR the pause
+            // menu is up. Read nothing, report nothing — the actions themselves stay enabled
+            // (shared with whichever reader *is* routed right now, and needed by the pause menu
+            // itself), only this reader's outputs go neutral. Gating here keeps every downstream
+            // consumer (Bow reticle, Eko aim, controller state machine) inert without each having
+            // to check pause on its own. The gate uses PauseMenu's own flag rather than
+            // Time.timeScale so a brief hitstop freeze (which also sets timeScale to 0) doesn't
+            // silently swallow inputs the player pressed during that flash frame.
+            if (!routed || NixAndEko.Environment.PauseMenu.IsGameplayPaused)
             {
                 Move = Vector2.zero;
                 Aim = Vector2.zero;
@@ -164,6 +176,7 @@ namespace NixAndEko.Player
             CrouchHeld = _crouch != null && _crouch.IsPressed();
             InteractPressed = _interact != null && _interact.WasPressedThisFrame();
             MapPressed = _map != null && _map.WasPressedThisFrame();
+            PausePressed = _pause != null && _pause.WasPressedThisFrame();
         }
 
         /// <summary>

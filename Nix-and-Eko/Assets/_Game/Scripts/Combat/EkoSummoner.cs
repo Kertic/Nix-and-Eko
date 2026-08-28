@@ -190,7 +190,18 @@ namespace NixAndEko.Combat
             EkoOrb.Chase(from, () => ArrowCenter(arrow), fetchLegDuration, onArrive: () =>
             {
                 Vector3 grabAt = arrow != null ? ArrowCenter(arrow) : player.transform.position;
-                if (arrow != null) { grabbed = true; Destroy(arrow.gameObject); }
+                if (arrow != null)
+                {
+                    grabbed = true;
+                    // MarkReclaimed silences Arrow.OnDestroy's safety-net re-grant: it fires for
+                    // an in-flight arrow being destroyed, and would hand Nix a fresh arrow the
+                    // instant the fetch orb touched the shot — the whole point of the fetch is
+                    // that the arrow rides the ORB back to her, so the grant belongs on the
+                    // return leg's onArrive below, not here. Landed pickups (`_stuck`) already
+                    // skip the safety net; this covers the in-flight case.
+                    arrow.MarkReclaimed();
+                    Destroy(arrow.gameObject);
+                }
 
                 EkoOrb.Chase(grabAt, () => player.transform.position, fetchLegDuration, onArrive: () =>
                 {
@@ -217,7 +228,18 @@ namespace NixAndEko.Combat
             EkoOrb.Chase(from, () => ArrowCenter(arrow), fetchLegDuration, onArrive: () =>
             {
                 Vector3 grabAt = arrow != null ? ArrowCenter(arrow) : player.transform.position;
-                if (arrow != null) { grabbed = true; Destroy(arrow.gameObject); }
+                if (arrow != null)
+                {
+                    grabbed = true;
+                    // MarkReclaimed silences Arrow.OnDestroy's safety-net re-grant: it fires for
+                    // an in-flight arrow being destroyed, and would hand Nix a fresh arrow the
+                    // instant the fetch orb touched the shot — the whole point of the fetch is
+                    // that the arrow rides the ORB back to her, so the grant belongs on the
+                    // return leg's onArrive below, not here. Landed pickups (`_stuck`) already
+                    // skip the safety net; this covers the in-flight case.
+                    arrow.MarkReclaimed();
+                    Destroy(arrow.gameObject);
+                }
 
                 EkoOrb.Chase(grabAt, () => player.transform.position, fetchLegDuration, onArrive: () =>
                 {
@@ -248,7 +270,10 @@ namespace NixAndEko.Combat
         // ------------------------------------------------------------------ Eko-side input
         void UpdateWhilePossessing()
         {
-            TryGrabArrow();
+            // Note: no walk-over arrow pickup during possession. Nix's dropped arrow is only
+            // retrieved by SHOOTING the frozen phantom with it (Eko.OnNixArrowHit) — a walking
+            // phantom just passes over the arrow without touching it. This keeps the retrieval
+            // beat a deliberate one-shot rather than an incidental collision.
 
             // R2 during possession = "commit and fire" in one press — a shortcut for L1-then-L1.
             if (ekoInput.NixBowPressed) { FireImmediate(); return; }

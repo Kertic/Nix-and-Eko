@@ -167,6 +167,15 @@ namespace NixAndEko.EditorTools
             var ekoT = root.transform.Find("Eko");
             if (ekoT != null) map.secondary = ekoT;
 
+            var pauseGo = new GameObject("PauseMenu");
+            pauseGo.transform.SetParent(root.transform, false);
+            var pause = pauseGo.AddComponent<NixAndEko.Environment.PauseMenu>();
+            pause.inputActions = inputAsset;
+
+            var labelsGo = new GameObject("PlayerStateLabels");
+            labelsGo.transform.SetParent(root.transform, false);
+            labelsGo.AddComponent<NixAndEko.Util.PlayerStateLabel>();
+
             ConfigureCamera(level, player);
 
             Selection.activeGameObject = root;

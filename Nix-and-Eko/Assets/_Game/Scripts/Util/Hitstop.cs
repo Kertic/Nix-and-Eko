@@ -41,9 +41,16 @@ namespace NixAndEko.Util
 
         static IEnumerator FreezeRoutine(float realSeconds)
         {
+            // Snapshot the scale we're stealing so we hand it back on release rather than
+            // hard-setting 1 — otherwise a hitstop that happens to overlap the pause menu (which
+            // also drives timeScale to 0) would silently unpause the game the instant the hitstop
+            // ended. And when the pause opens *during* a hitstop, we still hand back to 1 on
+            // resume because pause captures its own snapshot at open time (which will be 0 here);
+            // pause's own restore stays authoritative for the paused-then-resumed case.
+            float prior = Time.timeScale;
             Time.timeScale = 0f;
             yield return new WaitForSecondsRealtime(realSeconds);
-            Time.timeScale = 1f;
+            Time.timeScale = prior > 0f ? prior : 1f;
             _active = null;
         }
     }

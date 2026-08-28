@@ -198,6 +198,15 @@ namespace NixAndEko.Combat
         {
             if (!Active || sprite == null) return;
 
+            // While the pause menu is up, hide Eko's aim UI (reticle + preview line) so the world
+            // reads as frozen. The aim itself is preserved — nothing else runs — so resuming picks
+            // right back up where it left off.
+            if (NixAndEko.Environment.PauseMenu.IsGameplayPaused)
+            {
+                HideAimUI();
+                return;
+            }
+
             // Live: aim from input, updated each frame. Frozen: aim held, no input read.
             if (!Frozen) UpdateLiveAim();
 
