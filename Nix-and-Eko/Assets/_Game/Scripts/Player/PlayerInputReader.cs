@@ -51,7 +51,7 @@ namespace NixAndEko.Player
         [Range(0.05f, 1f)]
         public float aimStickRelease = 0.35f;
 
-        InputAction _move, _aim, _glide, _eko, _nixBow, _melee, _jump, _crouch, _interact;
+        InputAction _move, _aim, _glide, _eko, _nixBow, _melee, _jump, _crouch, _interact, _map;
 
         public Vector2 Move { get; private set; }
         /// <summary>Raw right-stick vector, deadzone applied by the Input System.</summary>
@@ -84,6 +84,9 @@ namespace NixAndEko.Player
         public bool CrouchHeld { get; private set; }
         public bool InteractPressed { get; private set; }
 
+        /// <summary>The frame the Map button (Select / M / Tab) went down — toggles the world map.</summary>
+        public bool MapPressed { get; private set; }
+
         void Awake()
         {
             if (actions == null)
@@ -109,6 +112,7 @@ namespace NixAndEko.Player
             _jump = map.FindAction("Jump");
             _crouch = map.FindAction("Crouch");
             _interact = map.FindAction("Interact");
+            _map = map.FindAction("Map", throwIfNotFound: false);
         }
 
         void OnEnable()
@@ -140,6 +144,7 @@ namespace NixAndEko.Player
                 GlideHeld = false;
                 CrouchHeld = false;
                 InteractPressed = false;
+                MapPressed = false;
                 return;
             }
 
@@ -158,6 +163,7 @@ namespace NixAndEko.Player
 
             CrouchHeld = _crouch != null && _crouch.IsPressed();
             InteractPressed = _interact != null && _interact.WasPressedThisFrame();
+            MapPressed = _map != null && _map.WasPressedThisFrame();
         }
 
         /// <summary>

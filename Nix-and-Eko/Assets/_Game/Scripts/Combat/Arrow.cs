@@ -49,6 +49,12 @@ namespace NixAndEko.Combat
         /// landed). EkoSummoner reads this to decide when the auto-fetch is eligible.</summary>
         public bool IsPickup => _isPickup;
 
+        /// <summary>Mark this arrow as taken by an external claimant (Eko's mid-flight catch, a
+        /// fetch orb, etc.) so the safety-net re-grant in <see cref="OnDestroy"/> stays quiet —
+        /// otherwise a caller destroying the arrow would double-give Nix a fresh one on top of
+        /// whatever the claimant hands back.</summary>
+        public void MarkReclaimed() => _reclaimed = true;
+
         Rigidbody2D _rb;
         Collider2D _col;
         bool _stuck;
@@ -303,18 +309,26 @@ namespace NixAndEko.Combat
                 other.transform != _homingTarget && !other.transform.IsChildOf(_homingTarget))
                 return;
 
-            // One of Nix's own arrows striking the planted Eko phantom swaps their places — Eko's
-            // own arrows never do (isEkoArrow). Only fires on a frozen (planted-and-waiting)
-            // phantom; a live, player-driven Eko is not a swap target. The arrow drops as a pickup
-            // at the impact point, which (after the swap) is exactly where Nix lands, so she can
-            // grab it right back.
+            // One of Nix's own arrows striking a planted (frozen) Eko hands the shot back — the
+            // phantom orbs the arrow home to Nix as a retrieval, replacing the older swap-places
+            // teleport (see Eko.OnNixArrowHit). Only fires on the frozen phantom: while the
+            // player is walking Eko around (Active && !Frozen), the arrow instead passes clean
+            // through him so the possessed body isn't a magnet for stray arrows. Impact returns
+            // before Stick either way — the retrieval consumes the arrow itself, and the walk-
+            // through case ignores the pair so the collision never re-fires.
             if (!isEkoArrow)
             {
                 var eko = other.GetComponentInParent<Eko>();
-                if (eko != null && eko.Active && eko.Frozen)
+                if (eko != null && eko.Active)
                 {
-                    eko.OnNixArrowHit();
-                    Stick(transform);   // Nix arrow → becomes a pickup where it struck
+                    if (eko.Frozen)
+                    {
+                        eko.OnNixArrowHit(this);
+                        return;
+                    }
+                    // Live phantom: never impact him. IgnoreCollision keeps subsequent contacts
+                    // silent too, so an arrow that scrapes his side doesn't get glued to him.
+                    if (_col != null) Physics2D.IgnoreCollision(_col, other, true);
                     return;
                 }
             }

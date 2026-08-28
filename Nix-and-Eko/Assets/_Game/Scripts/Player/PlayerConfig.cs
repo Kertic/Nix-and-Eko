@@ -83,9 +83,9 @@ namespace NixAndEko.Player
 
         [Header("Melee (R1 with an arrow)")]
         [Tooltip("Reach of the melee hitbox ahead of Nix (world units).")]
-        public float meleeRange = 1.1f;
+        public float meleeRange = 2.4f;
         [Tooltip("Height of the melee hitbox (world units).")]
-        public float meleeHeight = 1.2f;
+        public float meleeHeight = 2.0f;
         [Tooltip("Damage per melee hit.")]
         public int meleeDamage = 1;
         [Tooltip("Seconds each combo swing lasts.")]

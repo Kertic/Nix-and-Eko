@@ -395,30 +395,41 @@ namespace NixAndEko.Combat
             return arrow;
         }
 
-        /// <summary>Nix's own arrow struck the planted phantom: freeze-frame, swap Nix and Eko's
-        /// positions with a blue-orb zip at each end. The phantom stays planted (now where Nix was)
-        /// so a setup Eko survives the swap — its held aim is preserved. Only fires on a frozen
-        /// (planted-and-waiting) phantom; a live, player-driven Eko can't be swap-teleported.</summary>
-        public void OnNixArrowHit()
+        /// <summary>
+        /// Nix's own arrow struck the (live or planted) phantom: Eko catches it and orbs it back to
+        /// Nix as a retrieval. The arrow is destroyed on impact — it's now riding the orb — and Nix
+        /// gets it back when the orb lands on her. The phantom collapses into the orb, so a summoned
+        /// Eko is spent by the retrieval (no swap teleport, and no button was pressed for it).
+        /// A quick hitstop still sells the catch.
+        /// </summary>
+        public void OnNixArrowHit(Arrow arrow)
         {
-            if (!Active || !Frozen || player == null || ekoPlayer == null) return;
-
-            Vector3 nixPos = player.transform.position;
-            Vector3 ekoPos = transform.position;
+            if (!Active || player == null || arrow == null) return;
 
             Hitstop.Freeze(CatchHitstop);
 
-            // Move Nix onto Eko's spot at a dead stop, and move Eko (still frozen — SetFrozen keeps
-            // its rigidbody suspended, so ekoPlayer.Rb.position must be written along with the
-            // transform for the interpolated body to actually relocate) onto Nix's old spot.
-            player.transform.position = ekoPos;
-            player.Velocity = Vector2.zero;
-            transform.position = nixPos;
-            if (ekoPlayer.Rb != null) ekoPlayer.Rb.position = nixPos;
+            Vector3 from = transform.position;
+            bool wasBlue = arrow.blue;
 
-            // Two orbs crossing: Nix's trail into Eko's old spot, Eko's into Nix's old spot.
-            EkoOrb.Fly(nixPos, ekoPos, 0.16f);
-            EkoOrb.Fly(ekoPos, nixPos, 0.16f);
+            // Consume the arrow: it becomes payload for the orb, not a pickup on the ground.
+            // MarkReclaimed silences the safety-net re-grant Arrow.OnDestroy would otherwise fire
+            // — the orb hands one arrow back on arrival; we mustn't grant a second one now.
+            arrow.MarkReclaimed();
+            Destroy(arrow.gameObject);
+
+            // Phantom is spent — vanish (a burst where it stood) so the orb clearly reads as Eko
+            // itself hand-carrying the arrow home.
+            Vanish();
+
+            // Curved-orb chase back to Nix's live position; on arrival, hand the arrow back to
+            // whichever slot it came out of.
+            Bow bow = nixBow;
+            PlayerController nix = player;
+            EkoOrb.Chase(from, () => nix.transform.position, 0.35f, onArrive: () =>
+            {
+                if (bow != null) bow.GiveArrow(wasBlue);
+                Sfx.Play(Sfx.Id.EkoCatch);
+            });
         }
     }
 }
