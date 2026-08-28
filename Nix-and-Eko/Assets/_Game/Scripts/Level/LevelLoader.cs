@@ -15,6 +15,8 @@ namespace NixAndEko.Level
     /// </summary>
     public class LevelLoader : MonoBehaviour
     {
+        [Tooltip("Legacy: assign a Level data asset to build geometry from it. Leave empty to " +
+                 "use LevelBlockObjects already present in the scene (the new scene-first flow).")]
         public LevelData level;
         public PlayerConfig playerConfig;
         public InputActionAsset inputActions;
@@ -25,17 +27,37 @@ namespace NixAndEko.Level
         public bool configureCamera = true;
         [Tooltip("Spawn the on-screen debug HUD (controls + state readout).")]
         public bool spawnDebugHud = true;
+        [Tooltip("Spawn the world map overlay (toggled with Select / M / Tab).")]
+        public bool spawnMap = true;
+
+        [Header("Scene-first mode (no LevelData asset)")]
+        [Tooltip("Where the player starts when the level lives as scene GameObjects. Ignored " +
+                 "when a LevelData asset is assigned above.")]
+        public Vector2 sceneSpawn = new Vector2(0f, 2f);
+        [Tooltip("Falling below this Y respawns the player. Scene-first mode only.")]
+        public float sceneKillY = -80f;
 
         void Start()
         {
-            if (level == null)
+            int groundLayer = Mathf.Max(0, LayerMask.NameToLayer(groundLayerName));
+            Vector2 spawn; float killY;
+
+            if (level != null)
             {
-                Debug.LogWarning("[LevelLoader] No level assigned.", this);
-                return;
+                // Legacy data-driven flow — kept so old levels still boot.
+                LevelBuilder.Build(level, transform, groundLayer);
+                spawn = level.playerSpawn;
+                killY = level.killY;
+            }
+            else
+            {
+                // Scene-first: LevelBlockObjects already in the scene self-configure via their
+                // own ExecuteAlways + Start. Nothing to build here; the loader just spawns the
+                // shared bits (backdrop, player, map, camera) alongside them.
+                spawn = sceneSpawn;
+                killY = sceneKillY;
             }
 
-            int groundLayer = Mathf.Max(0, LayerMask.NameToLayer(groundLayerName));
-            LevelBuilder.Build(level, transform, groundLayer);
             BuildScenery();
 
             PlayerController player = null;
@@ -43,14 +65,15 @@ namespace NixAndEko.Level
             {
                 Arrow arrow = PlayerFactory.BuildArrowTemplate(transform);
                 player = PlayerFactory.Build(playerConfig, inputActions, groundLayer,
-                    arrow, level.playerSpawn, transform, level.killY);
+                    arrow, spawn, transform, killY);
 
                 if (spawnDebugHud) AddDebugHud(player);
+                if (spawnMap) AddMap(player);
             }
 
             // Eko exists as a second PlayerController now (see PlayerFactory), so the camera needs
             // to be told explicitly who to follow rather than finding "the" PlayerController.
-            if (configureCamera) ConfigureCamera(player);
+            if (configureCamera) ConfigureCamera(player, spawn);
         }
 
         /// <summary>Spawn the parallax faerie-forest backdrop (sky gradient, silhouette trees,
@@ -60,6 +83,22 @@ namespace NixAndEko.Level
             var go = new GameObject("Scenery");
             go.transform.SetParent(transform, false);
             go.AddComponent<NixAndEko.Environment.Scenery>();
+        }
+
+        /// <summary>Attach the world-map overlay (Select / M / Tab), following the player.</summary>
+        void AddMap(PlayerController player)
+        {
+            var mapGo = new GameObject("MapDisplay");
+            mapGo.transform.SetParent(transform, false);
+            var map = mapGo.AddComponent<NixAndEko.Environment.MapDisplay>();
+            map.level = level;                       // null in scene-first mode; MapDisplay handles that
+            map.sceneSpawn = sceneSpawn;
+            map.sceneKillY = sceneKillY;
+            map.player = player.transform;
+            map.input = player.GetComponent<PlayerInputReader>();
+            // Second dot for Eko, if the summoner built one under the level root.
+            var eko = transform.Find("Eko");
+            if (eko != null) map.secondary = eko;
         }
 
         void AddDebugHud(PlayerController player)
@@ -77,7 +116,7 @@ namespace NixAndEko.Level
         /// archer, with pixel-perfect upscaling when the package is present. Runtime-safe — the
         /// PixelPerfectCamera type is resolved by reflection so there's no hard package dependency.
         /// </summary>
-        void ConfigureCamera(PlayerController player)
+        void ConfigureCamera(PlayerController player, Vector2 spawn)
         {
             var cam = Camera.main;
             if (cam == null) return;
@@ -85,7 +124,7 @@ namespace NixAndEko.Level
             cam.orthographic = true;
             cam.orthographicSize = 10f;
             cam.backgroundColor = Palette.Black;
-            cam.transform.position = new Vector3(level.playerSpawn.x, level.playerSpawn.y + 3f, -10f);
+            cam.transform.position = new Vector3(spawn.x, spawn.y + 3f, -10f);
 
             var type = System.Type.GetType("UnityEngine.U2D.PixelPerfectCamera, Unity.2D.PixelPerfect.Runtime")
                        ?? System.Type.GetType("UnityEngine.U2D.PixelPerfectCamera, Unity.RenderPipelines.Universal.Runtime");

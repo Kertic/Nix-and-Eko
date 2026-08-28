@@ -37,6 +37,11 @@ namespace NixAndEko.Player.States
 
             // Swipe, thrust, overhead — the overhead reads heavier (lower pitch).
             Sfx.Play(Sfx.Id.Melee, _hit == 2 ? 0.85f : 1f + _hit * 0.08f);
+
+            // Blade smear — a fading crescent arc traced across the swing, so the strike reads
+            // as a real slash rather than an invisible hitbox. Sits at Nix's centre; the shape
+            // depends on which hit of the combo this is (swipe / thrust / overhead).
+            MeleeSmear.Play(P.transform.position, P.Facing, _hit, Cfg.meleeRange, Cfg.meleeHitDuration + 0.05f);
         }
 
         public override void Tick(float dt)

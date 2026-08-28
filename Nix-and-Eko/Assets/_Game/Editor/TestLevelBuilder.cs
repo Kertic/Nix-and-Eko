@@ -158,6 +158,15 @@ namespace NixAndEko.EditorTools
             hud.health = player.GetComponent<Health>();
             hud.bow = player.GetComponentInChildren<Bow>();
 
+            var mapGo = new GameObject("MapDisplay");
+            mapGo.transform.SetParent(root.transform, false);
+            var map = mapGo.AddComponent<NixAndEko.Environment.MapDisplay>();
+            map.level = level;
+            map.player = player.transform;
+            map.input = player.GetComponent<NixAndEko.Player.PlayerInputReader>();
+            var ekoT = root.transform.Find("Eko");
+            if (ekoT != null) map.secondary = ekoT;
+
             ConfigureCamera(level, player);
 
             Selection.activeGameObject = root;

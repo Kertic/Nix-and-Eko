@@ -65,6 +65,8 @@ namespace NixAndEko.Util
         public static Particle Spawn(Vector3 position, Quaternion rotation, Vector3 scale, int sortingOrder = 12)
         {
             var go = new GameObject("Particle");
+            Transform parent = Container();
+            if (parent != null) go.transform.SetParent(parent, worldPositionStays: false);
             go.transform.SetPositionAndRotation(position, rotation);
             go.transform.localScale = scale;
 
@@ -74,6 +76,26 @@ namespace NixAndEko.Util
 
             return go.AddComponent<Particle>();
         }
+
+        // A single per-scene container so live particles die cleanly with the scene they belong to.
+        // Fixes the "Some objects were not cleaned up when closing the scene" warning that fires
+        // when short-lived particles spawn at scene root while the scene is being unloaded — the
+        // container is destroyed with the scene, taking any orphans along with it. Recreated lazily
+        // if a later spawn happens after a scene change.
+        static Transform _container;
+
+        static Transform Container()
+        {
+            if (_container != null) return _container;
+            var go = new GameObject("~Particles");
+            _container = go.transform;
+            return _container;
+        }
+
+        /// <summary>Shared per-scene container for short-lived FX GameObjects (particles, blade
+        /// smears, one-shot orbs) so they die cleanly with the scene rather than lingering at
+        /// scene root during unload.</summary>
+        public static Transform FxContainer() => Container();
 
         /// <summary>A radial pop of <paramref name="count"/> particles — an impact flourish.</summary>
         public static void Burst(Vector3 center, Color color, int count = 12, float speed = 6f,

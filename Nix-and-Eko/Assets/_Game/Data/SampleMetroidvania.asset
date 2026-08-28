@@ -1,0 +1,777 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae543b2dbdbe5924b927197a4b1264ae, type: 3}
+  m_Name: SampleMetroidvania
+  m_EditorClassIdentifier: 
+  playerSpawn: {x: 0, y: 2}
+  killY: -80
+  blocks:
+  - type: 0
+    position: {x: -22, y: 23}
+    size: {x: 36, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 22, y: 23}
+    size: {x: 36, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -40, y: 14.5}
+    size: {x: 2, y: 17}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 40, y: 14.5}
+    size: {x: 2, y: 17}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -14, y: 4}
+    size: {x: 6, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: 0, y: 6}
+    size: {x: 6, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: 14, y: 4}
+    size: {x: 6, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -8, y: 10}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: 8, y: 10}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: 0, y: 1.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: -20, y: 1.5}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: 20, y: 1.5}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 5
+    position: {x: -40, y: 3.5}
+    size: {x: 2, y: 5}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 1
+    minCharge: 0.5
+    openOffset: {x: 0, y: 5.5}
+  - type: 6
+    position: {x: -34, y: 1.5}
+    size: {x: 1, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 1
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -56, y: -1}
+    size: {x: 30, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -56, y: 9}
+    size: {x: 30, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -72, y: -8}
+    size: {x: 2, y: 32}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -56, y: -8}
+    size: {x: 2, y: 32}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -62, y: -2}
+    size: {x: 5, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -66, y: -7}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -62, y: -12}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -66, y: -17}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 3
+    position: {x: -64, y: -4.7}
+    size: {x: 3, y: 0.6}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 3
+    position: {x: -60, y: -14.7}
+    size: {x: 3, y: 0.6}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -64, y: -25}
+    size: {x: 18, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: -70, y: -22.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 9
+    position: {x: -60, y: -23}
+    size: {x: 1, y: 0.9}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 7
+    position: {x: -55, y: -22.5}
+    size: {x: 1.2, y: 3}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.4
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -50, y: -25}
+    size: {x: 10, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: -47, y: -22.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -6, y: 46}
+    size: {x: 2, y: 46}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 6, y: 46}
+    size: {x: 2, y: 46}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -3, y: 28}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: 3, y: 34}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -3, y: 40}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: 3, y: 46}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -3, y: 52}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: 3, y: 58}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -3, y: 64}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 7
+    position: {x: -6, y: 36}
+    size: {x: 1.2, y: 3}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.6
+    openOffset: {x: 0, y: 4.5}
+  - type: 7
+    position: {x: 6, y: 54}
+    size: {x: 1.2, y: 3}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.6
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -11, y: 33}
+    size: {x: 10, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: -13, y: 35.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 11, y: 51}
+    size: {x: 10, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: 13, y: 53.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -15, y: 69}
+    size: {x: 18, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 15, y: 69}
+    size: {x: 18, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 0, y: 79}
+    size: {x: 24, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: 0, y: 71.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 9
+    position: {x: -6, y: 71}
+    size: {x: 1, y: 0.9}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 9
+    position: {x: 6, y: 71}
+    size: {x: 1, y: 0.9}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 5
+    position: {x: 40, y: 3.5}
+    size: {x: 2, y: 5}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 2
+    minCharge: 0.5
+    openOffset: {x: 0, y: 5.5}
+  - type: 6
+    position: {x: 8, y: 18}
+    size: {x: 1, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 2
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 76, y: -3}
+    size: {x: 68, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 76, y: 15}
+    size: {x: 68, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 110, y: 6}
+    size: {x: 2, y: 16}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 3
+    position: {x: 55, y: -1.7}
+    size: {x: 8, y: 0.6}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 3
+    position: {x: 70, y: -1.7}
+    size: {x: 8, y: 0.6}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 3
+    position: {x: 85, y: -1.7}
+    size: {x: 8, y: 0.6}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 3
+    position: {x: 100, y: -1.7}
+    size: {x: 8, y: 0.6}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 2
+    position: {x: 50, y: 2}
+    size: {x: 3, y: 0.5}
+    patrolOffset: {x: 0, y: 4}
+    speed: 2
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 2
+    position: {x: 62, y: 2}
+    size: {x: 3, y: 0.5}
+    patrolOffset: {x: 0, y: 5}
+    speed: 2.5
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 2
+    position: {x: 78, y: 2}
+    size: {x: 3, y: 0.5}
+    patrolOffset: {x: 8, y: 0}
+    speed: 3.5
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 2
+    position: {x: 92, y: 3}
+    size: {x: 3, y: 0.5}
+    patrolOffset: {x: -6, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 2
+    position: {x: 104, y: 4}
+    size: {x: 3, y: 0.5}
+    patrolOffset: {x: 0, y: 6}
+    speed: 2.5
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 9
+    position: {x: 60, y: 7}
+    size: {x: 1, y: 0.9}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 9
+    position: {x: 90, y: 7}
+    size: {x: 1, y: 0.9}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: 108, y: -0.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -32, y: -1}
+    size: {x: 16, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 10, y: -1}
+    size: {x: 60, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 5
+    position: {x: -22, y: -1}
+    size: {x: 4, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 3
+    minCharge: 0.5
+    openOffset: {x: 0, y: 2.5}
+  - type: 6
+    position: {x: -30, y: 6}
+    size: {x: 1, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 3
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: -30, y: -10}
+    size: {x: 2, y: 16}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 30, y: -10}
+    size: {x: 2, y: 16}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 0, y: -23}
+    size: {x: 60, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -22, y: -6}
+    size: {x: 6, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: -10, y: -9}
+    size: {x: 6, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: 4, y: -12}
+    size: {x: 6, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: 18, y: -15}
+    size: {x: 6, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 1
+    position: {x: 26, y: -18}
+    size: {x: 4, y: 0.4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 5
+    position: {x: -30, y: -20}
+    size: {x: 2, y: 4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 4
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 5
+    position: {x: 30, y: -20}
+    size: {x: 2, y: 4}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 4
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 6
+    position: {x: -6, y: -8}
+    size: {x: 1, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 4
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 6
+    position: {x: 22, y: -14}
+    size: {x: 1, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 4
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: -14, y: -21.5}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: 10, y: -21.5}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 8
+    position: {x: 22, y: -21.5}
+    size: {x: 0.9, y: 1}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 3
+    position: {x: 0, y: -21.7}
+    size: {x: 4, y: 0.6}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: -28, y: -20.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: 28, y: -20.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 46, y: -23}
+    size: {x: 30, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 46, y: -13}
+    size: {x: 30, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 0
+    position: {x: 60, y: -18}
+    size: {x: 2, y: 8}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
+  - type: 7
+    position: {x: 45, y: -20.5}
+    size: {x: 1.2, y: 3}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.7
+    openOffset: {x: 0, y: 4.5}
+  - type: 4
+    position: {x: 55, y: -20.5}
+    size: {x: 1, y: 2}
+    patrolOffset: {x: 4, y: 0}
+    speed: 3
+    linkId: 0
+    minCharge: 0.5
+    openOffset: {x: 0, y: 4.5}
