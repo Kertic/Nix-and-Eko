@@ -243,7 +243,10 @@ namespace NixAndEko.Combat
             {
                 _dashArrow.MarkReclaimed();
                 Destroy(_dashArrow.gameObject);
-                bow.GiveArrow(false);
+                // Grant the SPECTRAL slot — the dash gives a temporary blue arrow, not Nix's
+                // full normal shot back. Her physical arrow was spent on the shot that landed
+                // there; the "return" is Eko riding it back as a one-shot spectral.
+                bow.GiveArrow(blue: true);
             }
             _dashArrow = null;
             _ui = UiState.Idle;
