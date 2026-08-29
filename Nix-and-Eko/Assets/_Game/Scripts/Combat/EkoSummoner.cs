@@ -56,10 +56,13 @@ namespace NixAndEko.Combat
         public float dashLandOffset = 0.7f;
         [Tooltip("Bonus invulnerability granted for the dash + a short landing grace.")]
         public float dashInvuln = 0.35f;
-        [Tooltip("Bright-blue tether tint that zips from Nix to the arrow during the dash.")]
+        [Tooltip("Bright-blue tether tint that Eko throws from the arrow spot to Nix.")]
         public Color tetherColor = new Color(0.4f, 0.85f, 1f, 1f);
         [Tooltip("Line width of the tether, in world units.")]
         public float tetherWidth = 0.15f;
+        [Tooltip("Seconds the tether takes to whip out from Eko to Nix before she starts " +
+                 "travelling along it. Unscaled time.")]
+        public float tetherThrowDuration = 0.09f;
 
         /// <summary>Dash travel time, locked to the fetch orb's single-leg duration so the
         /// dash and a recall feel like matching motions.</summary>
@@ -91,6 +94,8 @@ namespace NixAndEko.Combat
         bool _consumedPressForHold;
 
         // Dash state
+        enum DashPhase { Throwing, Travelling }
+        DashPhase _dashPhase;
         float _dashTimer;
         Vector3 _dashStart;
         Vector3 _dashEnd;
@@ -98,8 +103,9 @@ namespace NixAndEko.Combat
         Arrow _dashArrow;
         LineRenderer _dashTether;
         bool _dashSpentThisAirtime;
-        /// <summary>Set on a successful dash-tether: the arrow was left stuck, Eko will orb out
-        /// and fetch it the moment Nix touches ground again.</summary>
+        /// <summary>Set on a successful dash-tether: the arrow was left stuck AND the phantom is
+        /// still standing at the arrow spot. When Nix touches ground again, the phantom orbs
+        /// home carrying the arrow (see TickAwaitingGround).</summary>
         bool _dashArrowPendingReturn;
 
         // Morph / aim state
@@ -150,13 +156,10 @@ namespace NixAndEko.Combat
 
             EnsureNoCollisionBetweenNixAndEko();
 
-            // Reset per-airtime resources on ground touch, and kick off the automatic post-dash
-            // retrieval if there's an arrow waiting.
-            if (player.Grounded)
-            {
-                _dashSpentThisAirtime = false;
-                MaybeAutoRetrieveAfterDash();
-            }
+            // Reset per-airtime resources on ground touch. (Auto-retrieve after a dash is
+            // handled by TickAwaitingGround now — the phantom is standing at the arrow spot
+            // and orbs home with it.)
+            if (player.Grounded) _dashSpentThisAirtime = false;
 
             switch (_ui)
             {
@@ -206,30 +209,62 @@ namespace NixAndEko.Combat
         void StartDash(Arrow arrow)
         {
             _ui = UiState.Dashing;
+            _dashPhase = DashPhase.Throwing;
             _dashTimer = 0f;
             _dashArrow = arrow;
             _dashStart = player.transform.position;
             _dashTetherTarget = arrow.transform.position;
 
             Vector3 flight = arrow.transform.right;
-            _dashEnd = arrow.transform.position - flight.normalized * dashLandOffset;
+            Vector3 arrowPos = arrow.transform.position;
+            int facing = flight.x >= 0f ? 1 : -1;
+            _dashEnd = arrowPos - flight.normalized * dashLandOffset;
 
             _dashSpentThisAirtime = true;   // one grapple per airtime; resets on ground touch
 
+            // Eko materialises where the arrow is — he's the one throwing the tether. Aim UI
+            // stays off (this isn't a morph aim), and the phantom's PlayerController freezes so
+            // his transform doesn't drift. He'll stay standing there through the dash and the
+            // post-dash wait, so a follow-up hold-L1 can't spawn a SECOND phantom off the same
+            // arrow.
+            eko.Summon(arrowPos, facing);
+            ekoPlayer.SetFrozen(true);
+            SnapPhantomBody(arrowPos, facing);
+            eko.AimUiVisible = false;
+
             player.SetFrozen(true);
             player.SetIntangible(true);
-            if (nixHealth != null) nixHealth.GrantInvuln(DashDuration + dashInvuln);
+            if (nixHealth != null) nixHealth.GrantInvuln(tetherThrowDuration + DashDuration + dashInvuln);
 
-            SpawnDashTether(_dashStart, _dashTetherTarget);
+            // Tether starts as a zero-length line at Eko; the Throwing phase whips it out to Nix.
+            SpawnDashTether(arrowPos, arrowPos);
             Sfx.Play(Sfx.Id.EkoZip, 1.05f);
         }
 
         void TickDash()
         {
             _dashTimer += Time.unscaledDeltaTime;
-            float u = Mathf.Clamp01(_dashTimer / DashDuration);
-            float eased = Mathf.SmoothStep(0f, 1f, u);
-            Vector3 pos = Vector3.Lerp(_dashStart, _dashEnd, eased);
+
+            if (_dashPhase == DashPhase.Throwing)
+            {
+                // Tether whips out from Eko (fixed at the arrow spot) toward Nix's start
+                // position. Nix hasn't moved yet.
+                float u = Mathf.Clamp01(_dashTimer / Mathf.Max(0.01f, tetherThrowDuration));
+                float eased = Mathf.SmoothStep(0f, 1f, u);
+                Vector3 tetherEnd = Vector3.Lerp(_dashTetherTarget, _dashStart, eased);
+                if (_dashTether != null)
+                {
+                    _dashTether.SetPosition(0, _dashTetherTarget);
+                    _dashTether.SetPosition(1, tetherEnd);
+                }
+                if (u >= 1f) { _dashPhase = DashPhase.Travelling; _dashTimer = 0f; }
+                return;
+            }
+
+            // Travelling phase — Nix zips along the tether toward Eko/arrow.
+            float t = Mathf.Clamp01(_dashTimer / DashDuration);
+            float travelEased = Mathf.SmoothStep(0f, 1f, t);
+            Vector3 pos = Vector3.Lerp(_dashStart, _dashEnd, travelEased);
             player.transform.position = pos;
             if (player.Rb != null) player.Rb.position = pos;
 
@@ -239,7 +274,7 @@ namespace NixAndEko.Combat
                 _dashTether.SetPosition(1, _dashTetherTarget);
             }
 
-            if (u >= 1f) EndDash(reclaim: true);
+            if (t >= 1f) EndDash(reclaim: true);
         }
 
         void EndDash(bool reclaim)
@@ -250,15 +285,21 @@ namespace NixAndEko.Combat
 
             if (reclaim && _dashArrow != null)
             {
-                // Grant the SPECTRAL slot — dash gives a temporary blue arrow, not Nix's full
-                // normal shot back. The physical arrow STAYS stuck where it was; Eko will orb
-                // out and fetch it the moment Nix touches ground (see MaybeAutoRetrieve). This
-                // is what closes the ammo loop cleanly instead of soft-locking her.
+                // Grant spectral. Arrow stays stuck. Phantom stays out at the arrow spot —
+                // transition to AwaitingGround so a follow-up hold-L1 can't spawn another
+                // phantom off the same arrow, and the ground-touch handler orbs the phantom
+                // home with the arrow.
                 bow.GiveArrow(blue: true);
                 _dashArrowPendingReturn = true;
+                _ui = UiState.AwaitingGround;
+            }
+            else
+            {
+                // Dash aborted — quietly retire the phantom too.
+                if (eko != null && eko.Active) eko.Vanish();
+                _ui = UiState.Idle;
             }
             _dashArrow = null;
-            _ui = UiState.Idle;
             _consumedPressForHold = false;
         }
 
@@ -435,27 +476,39 @@ namespace NixAndEko.Combat
         {
             if (!player.Grounded) return;
 
-            // Nix has landed. Eko orbs home, Nix's normal arrow slot is restored — this is the
-            // ONE way back to her normal ammo after a morph, which is what stops the fire-and-
-            // catch-yourself loop from being free.
-            eko.DismissWithOrb();
-            bow.GiveArrow(false);
+            // Two flavours of "phantom is standing out waiting for Nix to land":
+            //  1. After a dash-tether — the arrow is still stuck at the phantom's spot; the
+            //     phantom orbs home carrying it, granting Nix her normal slot back.
+            //  2. After a hold-morph fire — the arrow was consumed by the morph; the phantom
+            //     orbs home empty-handed and hands the normal slot back on arrival.
+            if (_dashArrowPendingReturn) OrbPhantomHomeWithArrow();
+            else { eko.DismissWithOrb(); bow.GiveArrow(false); }
+
             _ui = UiState.Idle;
         }
 
-        // ================================================================== Auto-retrieve after dash
-        /// <summary>Nix has just touched ground after a dash-tether. If the arrow she zipped to is
-        /// still stuck out there, send Eko to orb it home automatically — no button press. If the
-        /// arrow was lost somehow (destroyed by an enemy, timed out), just hand her the normal
-        /// slot directly so she never lands ammo-empty.</summary>
-        void MaybeAutoRetrieveAfterDash()
+        /// <summary>Post-dash landing: the phantom is standing at the arrow spot and rides home
+        /// carrying it as one orb — the arrow's destroyed, the phantom's dismissed silently
+        /// (the orb IS the visual), and Nix's normal slot fills when the orb touches her.</summary>
+        void OrbPhantomHomeWithArrow()
         {
-            if (!_dashArrowPendingReturn || _fetching) return;
             _dashArrowPendingReturn = false;
-
             Arrow a = bow.LastFiredArrow;
-            if (a != null && a.IsPickup) StartFetch(player.transform.position, a);
-            else bow.GiveArrow(false);   // arrow gone — restore normal directly, no soft-lock
+            Vector3 from = eko.Active ? eko.transform.position : player.transform.position;
+
+            if (a != null)
+            {
+                a.MarkReclaimed();
+                Destroy(a.gameObject);
+            }
+            if (eko.Active) eko.Dismiss();   // silent — the chase orb below is the visual
+
+            _fetching = true;
+            EkoOrb.Chase(from, () => player.transform.position, fetchLegDuration, onArrive: () =>
+            {
+                bow.GiveArrow(false);
+                _fetching = false;
+            });
         }
 
         // ================================================================== Fetch (R2)
