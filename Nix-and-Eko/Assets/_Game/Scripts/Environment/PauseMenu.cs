@@ -36,7 +36,7 @@ namespace NixAndEko.Environment
 
         const string OverridesKey = "NixEko.InputOverrides.v1";
 
-        enum Page { Root, Controls, Debug }
+        enum Page { Root, Controls, Debug, Abilities }
 
         bool _open;
         Page _page = Page.Root;
@@ -165,7 +165,14 @@ namespace NixAndEko.Environment
                        || (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame);
             if (cancel)
             {
-                if (_page != Page.Root || _pendingPage.HasValue) GoToPage(Page.Root);
+                // Cancel walks one level up the page hierarchy: Abilities → Debug → Root, and
+                // Controls → Root. Any queued pending page also unwinds so a double-tap cancel
+                // doesn't skip the level a click was still transitioning into.
+                if (_page != Page.Root || _pendingPage.HasValue)
+                {
+                    Page from = _pendingPage ?? _page;
+                    GoToPage(from == Page.Abilities ? Page.Debug : Page.Root);
+                }
                 else SetOpen(false);
                 return;
             }
@@ -308,6 +315,7 @@ namespace NixAndEko.Environment
                 case Page.Root:     DrawRootPage(); break;
                 case Page.Controls: DrawControlsPage(); break;
                 case Page.Debug:    DrawDebugPage(); break;
+                case Page.Abilities: DrawAbilitiesPage(); break;
             }
 
             GUILayout.EndArea();
@@ -412,8 +420,52 @@ namespace NixAndEko.Environment
             string hudText = "HUD Text Panel: " + (Util.DebugHud.Enabled ? "On" : "Off");
             if (BigFocusable(hudText)) Util.DebugHud.Enabled = !Util.DebugHud.Enabled;
 
+            GUILayout.Space(6f);
+            if (BigFocusable("Abilities…")) GoToPage(Page.Abilities);
+
             GUILayout.Space(20f);
             if (BigFocusable("Back", 120f)) GoToPage(Page.Root);
+        }
+
+        void DrawAbilitiesPage()
+        {
+            var title = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            title.normal.textColor = accent;
+            GUILayout.Label("ABILITIES", title, GUILayout.Height(30f));
+
+            var hint = new GUIStyle(GUI.skin.label) { fontSize = 12, alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            hint.normal.textColor = new Color(0.8f, 0.85f, 0.95f, 0.9f);
+            GUILayout.Label("Toggle unlocks for playtesting. Changes take effect immediately.", hint);
+            GUILayout.Space(10f);
+
+            // Each row is a checkmark-prefixed toggle button — clicking flips the underlying
+            // PlayerPrefs-backed flag, which the gameplay systems (bow, glide, shade summon) read
+            // live each frame, so a click here changes behavior on the very next input sample
+            // without any restart, respawn, or component rewire.
+            DrawAbilityToggle("Recall Arrow",         Util.PlayerAbilities.RecallArrow,
+                v => Util.PlayerAbilities.RecallArrow = v);
+            GUILayout.Space(6f);
+            DrawAbilityToggle("Make Shade",           Util.PlayerAbilities.MakeShade,
+                v => Util.PlayerAbilities.MakeShade = v);
+            GUILayout.Space(6f);
+            DrawAbilityToggle("Shade Fires Arrow",    Util.PlayerAbilities.ShadeFireArrow,
+                v => Util.PlayerAbilities.ShadeFireArrow = v);
+            GUILayout.Space(6f);
+            DrawAbilityToggle("Glider",               Util.PlayerAbilities.Glider,
+                v => Util.PlayerAbilities.Glider = v);
+
+            GUILayout.Space(20f);
+            if (BigFocusable("Back", 120f)) GoToPage(Page.Debug);
+        }
+
+        /// <summary>Draw one row on the Abilities page — a big focusable button whose label is
+        /// prefixed with a filled/empty checkbox glyph reflecting the current state. Clicking it
+        /// flips the flag via <paramref name="setter"/>. The checkbox glyph is monospace-safe
+        /// (leading spaces are stripped by the label alignment) so all four rows line up.</summary>
+        void DrawAbilityToggle(string label, bool value, System.Action<bool> setter)
+        {
+            string mark = value ? "☑" : "☐";   // ☑ / ☐
+            if (BigFocusable($"{mark}  {label}")) setter(!value);
         }
 
         void DrawControlsPage()

@@ -98,7 +98,8 @@ namespace NixAndEko.Player
         /// momentum is preserved instead of decaying, fall gravity is the lighter glide gravity,
         /// and the glide sprite shows. Runs out mid-air and this goes false on its own, dropping
         /// back to a normal fall even with the trigger still held.</summary>
-        public bool IsGliding => !Grounded && Input != null && Input.GlideHeld && GlideFuel > 0f;
+        public bool IsGliding => !Grounded && Input != null && Input.GlideHeld && GlideFuel > 0f
+                                 && PlayerAbilities.Glider;
 
         // --- Facing ---
         /// <summary>+1 faces right, -1 faces left.</summary>

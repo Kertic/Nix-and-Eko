@@ -129,7 +129,8 @@ namespace NixAndEko.Combat
             // desperate airborne R2 can't summon a fetch, since the whole return loop is meant
             // to close on Nix's feet. Bow.Update already only fires R2 when Nix has an arrow, so
             // this branch is unambiguous.
-            if (input.NixBowPressed && !bow.HasAnyArrow && !_fetching && player.GroundedForRecoil)
+            if (input.NixBowPressed && !bow.HasAnyArrow && !_fetching && player.GroundedForRecoil
+                && PlayerAbilities.RecallArrow)
             {
                 TryStartFetch();
                 return;
@@ -139,16 +140,19 @@ namespace NixAndEko.Combat
 
             if (eko.Active && eko.Frozen)
             {
-                // Planted phantom out and Nix pressed L1 — fire it. The phantom always has a
+                // Planted phantom out and Nix pressed L1 — fire it (or, if the shade-fire-arrow
+                // ability is locked, just dismiss the phantom back with an orb; the shade can
+                // still be summoned and planted, it just can't loose). The phantom always has a
                 // valid held aim (defaults to Eko's facing on summon, updates whenever the player
                 // aims during the possession), so this is unconditional now: previously a "never
                 // aimed → dismiss without firing" branch made it look like L1 was doing nothing,
                 // which is the opposite of what a player pressing L1 on a planted phantom expects.
-                FirePhantom();
+                if (PlayerAbilities.ShadeFireArrow) FirePhantom();
+                else eko.DismissWithOrb();
                 return;
             }
 
-            if (!eko.Active && CanSummon && !_fetching) BeginPossession();
+            if (!eko.Active && CanSummon && !_fetching && PlayerAbilities.MakeShade) BeginPossession();
         }
 
         /// <summary>Kick off the fetch orb. Bails silently if there's no downed arrow to grab
@@ -276,7 +280,14 @@ namespace NixAndEko.Combat
             // beat a deliberate one-shot rather than an incidental collision.
 
             // R2 during possession = "commit and fire" in one press — a shortcut for L1-then-L1.
-            if (ekoInput.NixBowPressed) { FireImmediate(); return; }
+            // If the shade can't fire arrows (ability locked), collapse the shortcut to a plain
+            // FreezeAndReturn so R2 still hands control back cleanly instead of dead-ending.
+            if (ekoInput.NixBowPressed)
+            {
+                if (PlayerAbilities.ShadeFireArrow) FireImmediate();
+                else FreezeAndReturn();
+                return;
+            }
 
             // L1 while controlling Eko = hand control back to Nix, leave Eko planted with aim.
             if (ekoInput.EkoPressed) FreezeAndReturn();
