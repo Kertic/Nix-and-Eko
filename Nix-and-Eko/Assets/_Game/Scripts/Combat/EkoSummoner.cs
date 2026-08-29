@@ -98,6 +98,9 @@ namespace NixAndEko.Combat
         Arrow _dashArrow;
         LineRenderer _dashTether;
         bool _dashSpentThisAirtime;
+        /// <summary>Set on a successful dash-tether: the arrow was left stuck, Eko will orb out
+        /// and fetch it the moment Nix touches ground again.</summary>
+        bool _dashArrowPendingReturn;
 
         // Morph / aim state
         float _morphTimer;
@@ -132,6 +135,7 @@ namespace NixAndEko.Combat
             _ui = UiState.Idle;
             _consumedPressForHold = false;
             _fetching = false;
+            _dashArrowPendingReturn = false;
         }
 
         void Update()
@@ -146,8 +150,13 @@ namespace NixAndEko.Combat
 
             EnsureNoCollisionBetweenNixAndEko();
 
-            // Reset per-airtime resources on ground touch.
-            if (player.Grounded) _dashSpentThisAirtime = false;
+            // Reset per-airtime resources on ground touch, and kick off the automatic post-dash
+            // retrieval if there's an arrow waiting.
+            if (player.Grounded)
+            {
+                _dashSpentThisAirtime = false;
+                MaybeAutoRetrieveAfterDash();
+            }
 
             switch (_ui)
             {
@@ -241,12 +250,12 @@ namespace NixAndEko.Combat
 
             if (reclaim && _dashArrow != null)
             {
-                _dashArrow.MarkReclaimed();
-                Destroy(_dashArrow.gameObject);
-                // Grant the SPECTRAL slot — the dash gives a temporary blue arrow, not Nix's
-                // full normal shot back. Her physical arrow was spent on the shot that landed
-                // there; the "return" is Eko riding it back as a one-shot spectral.
+                // Grant the SPECTRAL slot — dash gives a temporary blue arrow, not Nix's full
+                // normal shot back. The physical arrow STAYS stuck where it was; Eko will orb
+                // out and fetch it the moment Nix touches ground (see MaybeAutoRetrieve). This
+                // is what closes the ammo loop cleanly instead of soft-locking her.
                 bow.GiveArrow(blue: true);
+                _dashArrowPendingReturn = true;
             }
             _dashArrow = null;
             _ui = UiState.Idle;
@@ -432,6 +441,21 @@ namespace NixAndEko.Combat
             eko.DismissWithOrb();
             bow.GiveArrow(false);
             _ui = UiState.Idle;
+        }
+
+        // ================================================================== Auto-retrieve after dash
+        /// <summary>Nix has just touched ground after a dash-tether. If the arrow she zipped to is
+        /// still stuck out there, send Eko to orb it home automatically — no button press. If the
+        /// arrow was lost somehow (destroyed by an enemy, timed out), just hand her the normal
+        /// slot directly so she never lands ammo-empty.</summary>
+        void MaybeAutoRetrieveAfterDash()
+        {
+            if (!_dashArrowPendingReturn || _fetching) return;
+            _dashArrowPendingReturn = false;
+
+            Arrow a = bow.LastFiredArrow;
+            if (a != null && a.IsPickup) StartFetch(player.transform.position, a);
+            else bow.GiveArrow(false);   // arrow gone — restore normal directly, no soft-lock
         }
 
         // ================================================================== Fetch (R2)

@@ -71,7 +71,8 @@ namespace NixAndEko.Util
             GUILayout.Label("Gamepad: stick/d-pad move  X jump  O crouch", style);
             GUILayout.Label("  Right stick aims. R2 = Nix Bow, R1 = Nix Melee, L1 = Eko", style);
             GUILayout.Label("Eko rides Nix's arrow. Bright blue = normal, pale = spectral.", style);
-            GUILayout.Label("  L1 tap (stuck arrow, once per airtime): DASH along blue tether.", style);
+            GUILayout.Label("  L1 tap (once/airtime): DASH along blue tether; get spectral bonus.", style);
+            GUILayout.Label("    Arrow stays stuck; Eko auto-fetches it when Nix next grounds.", style);
             GUILayout.Label("  L1 hold: arrow MORPHS; camera focus; morph done -> TIME FREEZES.", style);
             GUILayout.Label("  Aim is full 360. Release L1: phantom fires spectral, holds spot.", style);
             GUILayout.Label("  Spectral catches Nix -> +spectral slot, momentum, +1 air jump.", style);
