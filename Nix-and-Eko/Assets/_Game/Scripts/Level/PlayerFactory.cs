@@ -93,7 +93,9 @@ namespace NixAndEko.Level
             // Also owns its own aim indicator + straight-line preview + firing (Eko's blue arrows).
             // Lives under the level root (not parented to Nix), so it keeps its own transform once
             // control hands back and it goes dormant.
-            var (ekoPlayer, ekoInput, eko) = BuildEko(parent, config, inputAsset, groundLayer, arrowTemplate);
+            // The tuple's dormant input reader is kept only so Eko's PlayerController has a
+            // non-null Input at Awake; nothing routes to it under the new flow.
+            var (ekoPlayer, _, eko) = BuildEko(parent, config, inputAsset, groundLayer, arrowTemplate);
             eko.player = controller;
             eko.nixBow = bow;
             // Never let the two bodies physically shove each other while both are simulating.
@@ -105,9 +107,7 @@ namespace NixAndEko.Level
             summoner.bow = bow;
             summoner.eko = eko;
             summoner.ekoPlayer = ekoPlayer;
-            summoner.ekoInput = ekoInput;
             summoner.nixHealth = health;
-            summoner.nixSprite = sr;
 
             // Lets Eko's arrows catch Nix — planted-phantom shots that hit her reload her air shot,
             // top glide back up, and launch her along Eko's aim.
@@ -162,7 +162,7 @@ namespace NixAndEko.Level
             bow.input = reader;
             bow.muzzle = muzzle.transform;
             bow.arrowPrefab = arrowTemplate;
-            bow.eightDirectional = true;
+            bow.eightDirectional = false;   // omni aim, matching the phantom
 
             // Reticle: points along the snapped aim, tinting white -> red with charge.
             var indicatorGo = new GameObject("AimIndicator");
@@ -300,7 +300,6 @@ namespace NixAndEko.Level
             eko.sprite = sr;
             eko.arrowPrefab = arrowTemplate;
             eko.ekoPlayer = controller;
-            eko.ekoInput = reader;
 
             // Aim reticle — same shape as Nix's Bow indicator, tinted blue by Eko itself each frame.
             var indicatorGo = new GameObject("EkoAimIndicator");
@@ -330,8 +329,6 @@ namespace NixAndEko.Level
             lr.positionCount = 0;
             trajGo.AddComponent<ProceduralLine>();
             eko.trajectory = lr;
-
-            eko.passThroughMarkers = BuildPassThroughMarkers(go.transform);
 
             return (controller, reader, eko);
         }

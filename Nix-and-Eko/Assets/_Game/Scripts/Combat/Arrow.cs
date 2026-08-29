@@ -38,7 +38,12 @@ namespace NixAndEko.Combat
         public bool blue;
         [Tooltip("How close Nix must come to a landed arrow to reclaim it (world units).")]
         public float pickupRadius = 0.7f;
-        public Color blueTint = new Color(0.4f, 0.72f, 1f);
+        [Tooltip("Colour of Nix's persistent normal arrow. Bright, saturated blue — matches the " +
+                 "dash tether so the arrow reads as \"the one you can dash/morph to\".")]
+        public Color normalTint = new Color(0.4f, 0.85f, 1f, 1f);
+        [Tooltip("Colour of a spectral (spent-on-use) arrow — the shot Eko fires from the phantom, " +
+                 "and the bonus blue-slot shot Nix loses on use. Pale, translucent — a ghostly hint.")]
+        public Color spectralTint = new Color(0.82f, 0.92f, 1f, 0.70f);
         [Tooltip("Degrees per second the homing arrow can turn toward its mark (aim assist).")]
         public float homingTurnRate = 720f;
         [Tooltip("Max seconds a homing arrow chases before giving up and despawning, so a shot " +
@@ -139,9 +144,13 @@ namespace NixAndEko.Combat
 
         void ApplyTint()
         {
-            if (!blue) return;
             var sr = GetComponentInChildren<SpriteRenderer>();
-            if (sr != null) sr.color = blueTint;
+            if (sr == null) return;
+            // Two blues, so the player can tell the arrow they can dash/morph to from a one-shot
+            // spectral echo. Spectral wins the check even if the arrow is also a Nix arrow — a
+            // hybrid would be an accident under the current design.
+            if (blue) sr.color = spectralTint;
+            else if (isNixArrow) sr.color = normalTint;
         }
 
         /// <summary>
@@ -203,18 +212,11 @@ namespace NixAndEko.Combat
             if (_homingTarget != null) HomingSteer();
         }
 
-        /// <summary>Reclaim a landed Nix arrow once she walks close enough to it.</summary>
-        void TryReclaim()
-        {
-            if (_pickupBow == null) return;
-            Vector2 target = _playerCol != null ? (Vector2)_playerCol.bounds.center
-                           : (Vector2)transform.position;
-            if (Vector2.Distance(target, transform.position) > pickupRadius) return;
-
-            _reclaimed = true;
-            _pickupBow.GiveArrow(blue);
-            Destroy(gameObject);
-        }
+        /// <summary>Walk-over pickup is intentionally disabled on the "Eko dashes to the arrow"
+        /// branch — retrieval is deliberate now (L1 tap to dash to the arrow, or R2 to send
+        /// Eko fetching). A stuck arrow sits as a pickup marker in the world until one of those
+        /// consumes it.</summary>
+        void TryReclaim() { /* no-op — see summary */ }
 
         /// <summary>
         /// Detect an Eko arrow catching Nix by overlap (physical collision with her is ignored, so

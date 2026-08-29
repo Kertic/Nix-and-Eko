@@ -2,30 +2,34 @@ using NixAndEko.Environment;
 using NixAndEko.Player;
 using NixAndEko.Util;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace NixAndEko.Combat
 {
     /// <summary>
-    /// Owns the whole Eko possession cycle. The button flow across a summon is:
+    /// Owns the Eko button flow:
     ///
-    /// <list type="number">
-    /// <item><b>L1 (Nix)</b>: <see cref="BeginPossession"/> — plant Eko on Nix's spot, hand
-    /// control to it, and drop Nix into ghost mode (crouched, translucent, intangible, frozen).</item>
-    /// <item><b>L1 (Eko)</b>: <see cref="FreezeAndReturn"/> — hand control back to Nix, leaving
-    /// Eko frozen where it stood with its current aim preserved. Nix wakes back up.</item>
-    /// <item><b>R2 (Eko)</b>: <see cref="FireImmediate"/> — a shortcut that does the L1-then-L1
-    /// beat in one press: freeze + return + fire, all in the same frame.</item>
-    /// <item><b>L1 (Nix, planted phantom out)</b>: <see cref="FireOrReturnPhantom"/> — if the
-    /// player actually aimed Eko during the possession the shot fires (and the phantom orbs
-    /// home); otherwise the phantom just orbs home without firing.</item>
-    /// <item><b>R2 (Nix, no arrow in hand)</b>: <see cref="TryStartFetch"/> — sends Eko out to
-    /// grab Nix's downed arrow and hand it back. If a planted phantom is standing, that phantom
-    /// vanishes first and the fetch orb sets off from wherever it stood.</item>
+    /// <list type="bullet">
+    /// <item><b>Tap L1</b> (arrow stuck, hasn't dashed this airtime): Nix dashes along a bright
+    /// blue tether to the arrow. Frozen + intangible during flight, brief invuln, reclaims the
+    /// arrow on arrival. The dash spends the airtime's grapple charge — one per airtime, reset
+    /// on ground touch. In-flight arrows and spectral arrows reject the tap.</item>
+    /// <item><b>Hold L1</b>: after a short tap threshold, the arrow morphs into the phantom in
+    /// place. Camera <b>snaps to Eko</b> so the player can see what they're aiming at. During
+    /// the morph animation, time still runs at normal speed. Once the morph finishes,
+    /// <see cref="Time.timeScale"/> drops to 0 for a bullet-time aim — everything freezes. Aim
+    /// is full 360°, driven by the same stick or mouse Nix uses for the bow (relative to the
+    /// phantom's world position).</item>
+    /// <item><b>Release</b>: the phantom looses a spectral arrow (spent on use, not
+    /// grapplable, doesn't refill LastFiredArrow) and <b>stays where it is</b>, watching. Time
+    /// resumes, camera snaps back to Nix. When the spectral shot catches Nix,
+    /// <see cref="EkoArrowTarget"/> grants +1 spectral (blue) slot, glide refill, momentum boost
+    /// and +1 air jump — NOT her normal slot (that would let her chain morphs indefinitely).</item>
+    /// <item><b>Ground touch (after firing)</b>: the phantom orbs home and Nix's normal arrow
+    /// slot is restored. This is the only path back to her normal ammo after a morph, so a
+    /// perfect morph → self-catch loop still ends with her having to land before firing again.</item>
+    /// <item><b>R2 (Nix, no arrow, grounded)</b>: <see cref="TryStartFetch"/> — unchanged.</item>
     /// </list>
-    ///
-    /// While possessed, walking Eko close enough to Nix's downed arrow grabs it too — that's
-    /// a separate, direct retrieval path. Eko is a once-per-airtime resource: summoning spends
-    /// the charge, and it only comes back when Nix actually stands on ground again.
     /// </summary>
     public class EkoSummoner : MonoBehaviour
     {
@@ -34,59 +38,89 @@ namespace NixAndEko.Combat
         public PlayerInputReader input;
         public Bow bow;
         public Eko eko;
-        [Tooltip("Eko's own locomotion controller — built alongside Nix's, kept dormant between possessions.")]
+        [Tooltip("Eko's own controller — frozen throughout, kept for the collider / animator.")]
         public PlayerController ekoPlayer;
-        [Tooltip("Eko's own input reader, over the same actions asset as Nix's — see PlayerInputReader.routed.")]
-        public PlayerInputReader ekoInput;
-        [Tooltip("Nix's Health, granted infinite invuln while she's in ghost mode so nothing can " +
-                 "hurt the intangible target.")]
+        [Tooltip("Nix's Health — brief invuln while she's mid-dash so a target she's dashing " +
+                 "into can't hurt her mid-flight.")]
         public Health nixHealth;
-        [Tooltip("Nix's sprite renderer — dimmed to translucent while she's in ghost mode.")]
-        public SpriteRenderer nixSprite;
 
-        [Header("Arrow grab")]
-        [Tooltip("How close Eko must walk to Nix's downed arrow to pick it up.")]
-        public float grabRadius = 0.8f;
+        [Header("Tap / hold")]
+        [Tooltip("Seconds L1 must be held past the initial press before it counts as a hold " +
+                 "(morph + aim) rather than a tap (dash). Runs on unscaled time.")]
+        public float tapHoldThreshold = 0.15f;
 
-        [Header("Auto-aim (Eko's shot homes on Nix if she's on its preview line)")]
-        [Tooltip("How close (perpendicular, world units) Nix must be to Eko's preview line at " +
-                 "release for the shot to home in on her.")]
-        public float assistRadius = 1.25f;
-        [Tooltip("Nix must be at least this far ahead of Eko along the line for a homing shot — " +
-                 "keeps a point-blank fire from auto-catching before the arrow even reads as launched.")]
-        public float assistMinDistance = 1.5f;
+        [Header("Dash to arrow (tap L1)")]
+        [Tooltip("How far past the arrow's tip Nix lands (world units, along the reverse of the " +
+                 "arrow's flight direction). Keeps her from ending inside the wall the arrow's " +
+                 "embedded in.")]
+        public float dashLandOffset = 0.7f;
+        [Tooltip("Bonus invulnerability granted for the dash + a short landing grace.")]
+        public float dashInvuln = 0.35f;
+        [Tooltip("Bright-blue tether tint that Eko throws from the arrow spot to Nix.")]
+        public Color tetherColor = new Color(0.4f, 0.85f, 1f, 1f);
+        [Tooltip("Line width of the tether, in world units.")]
+        public float tetherWidth = 0.15f;
+        [Tooltip("Seconds the tether takes to whip out from Eko to Nix before she starts " +
+                 "travelling along it. Unscaled time.")]
+        public float tetherThrowDuration = 0.09f;
+
+        /// <summary>Dash travel time, locked to the fetch orb's single-leg duration so the
+        /// dash and a recall feel like matching motions.</summary>
+        float DashDuration => Mathf.Max(0.01f, fetchLegDuration);
+
+        [Header("Morph (hold L1)")]
+        [Tooltip("Seconds the arrow-to-phantom morph animation takes (unscaled).")]
+        public float morphDuration = 0.15f;
+        [Tooltip("Phantom's starting scale on morph — grows to 1 over morphDuration.")]
+        public float morphStartScale = 0.15f;
 
         [Header("Fetch (R2 with no arrow)")]
-        [Tooltip("Seconds the fetch orb takes for each leg (Eko/phantom -> arrow, then arrow -> " +
-                 "Nix) — fixed regardless of distance, so a far-off arrow doesn't take forever.")]
         public float fetchLegDuration = 0.35f;
 
-        [Header("Ghost mode look")]
-        [Tooltip("Nix's sprite alpha while she's the intangible ghost — 1 = normal, 0 = invisible.")]
-        [Range(0f, 1f)]
-        public float ghostAlpha = 0.45f;
+        /// <summary>True while the phantom is out (morphing, aiming, or waiting to return).</summary>
+        public bool PhantomOut => _ui == UiState.Morphing || _ui == UiState.Aiming || _ui == UiState.AwaitingGround;
 
-        /// <summary>False once a phantom has been summoned this airtime, until Nix stands on ground again.</summary>
-        public bool CanSummon => !_spent;
-        /// <summary>True while the player is directly controlling Eko.</summary>
-        public bool Possessing => _possessing;
-        /// <summary>True while a fetch orb is currently in flight (out to grab Nix's arrow, or
-        /// coming back). Consumed by <see cref="Player.PlayerVisuals"/> to hide the head-orbit
-        /// Eko ball while the phantom is out doing the retrieval.</summary>
+        /// <summary>True while a fetch orb is in flight.</summary>
         public bool Fetching => _fetching;
 
-        bool _spent;
-        bool _possessing;
-        bool _carryingArrow;
-        bool _fetching;   // an orb fetch is in flight (Eko is busy — no summon, no re-fetch)
-        CameraFollow _camera;
-        Color _nixOriginalColor;
-        bool _nixColorCached;
+        /// <summary>True while the grapple has already been spent this airtime. Reset on ground touch.</summary>
+        public bool DashSpentThisAirtime => _dashSpentThisAirtime;
+
+        enum UiState { Idle, Dashing, Morphing, Aiming, AwaitingGround }
+        UiState _ui = UiState.Idle;
+
+        // Tap/hold tracking
+        float _pressAt;
+        bool _consumedPressForHold;
+
+        // Dash state
+        enum DashPhase { Throwing, Travelling }
+        DashPhase _dashPhase;
+        float _dashTimer;
+        Vector3 _dashStart;
+        Vector3 _dashEnd;
+        Vector3 _dashTetherTarget;
+        Arrow _dashArrow;
+        LineRenderer _dashTether;
+        bool _dashSpentThisAirtime;
+        /// <summary>Set on a successful dash-tether: the arrow was left stuck AND the phantom is
+        /// still standing at the arrow spot. When Nix touches ground again, the phantom orbs
+        /// home carrying the arrow (see TickAwaitingGround).</summary>
+        bool _dashArrowPendingReturn;
+
+        // Morph / aim state
+        float _morphTimer;
+        Arrow _morphArrow;
+        float _savedTimeScale = 1f;
+
+        // Aim
+        Camera _cam;
+
+        // Camera panning
+        CameraFollow _cameraFollow;
+
+        bool _fetching;
         Collider2D _ekoCol;
-        /// <summary>Nix's velocity at the moment she went ghost. Restored on ExitGhostMode so
-        /// summoning Eko mid-flight (running jump, air-shot recoil, etc.) doesn't kill her run
-        /// — she picks up exactly where she left off when control comes back.</summary>
-        Vector2 _nixCachedVelocity;
 
         void Awake()
         {
@@ -94,140 +128,403 @@ namespace NixAndEko.Combat
             if (input == null && player != null) input = player.Input;
             if (bow == null) bow = GetComponentInChildren<Bow>();
             if (nixHealth == null && player != null) nixHealth = player.GetComponent<Health>();
-            if (nixSprite == null && player != null && player.spriteRoot != null)
-                nixSprite = player.spriteRoot.GetComponent<SpriteRenderer>();
             if (_ekoCol == null && ekoPlayer != null) _ekoCol = ekoPlayer.GetComponent<Collider2D>();
+        }
+
+        void OnDisable()
+        {
+            if (_ui == UiState.Morphing || _ui == UiState.Aiming) RestoreTimeScale();
+            if (_ui == UiState.Dashing) EndDash(reclaim: false);
+            DestroyDashTether();
+            if (eko != null && eko.Active) eko.Dismiss();
+            FocusCameraOn(player != null ? player.transform : null, snap: true);
+            _ui = UiState.Idle;
+            _consumedPressForHold = false;
+            _fetching = false;
+            _dashArrowPendingReturn = false;
         }
 
         void Update()
         {
-            if (input == null || bow == null || eko == null || player == null ||
-                ekoPlayer == null || ekoInput == null) return;
+            if (input == null || bow == null || eko == null || player == null || ekoPlayer == null) return;
 
-            // Nix and the phantom must never physically shove each other. The pair was set at
-            // build time, but Unity clears Physics2D.IgnoreCollision pairs on some transitions
-            // (Rb.simulated toggles for ghost mode, bodyType flips on Kinematic freeze, and any
-            // collider that goes disabled/enabled), and every one of those happens across a
-            // possession cycle. Re-asserting here is O(1) and immune to which of the two bodies
-            // was the last to change state.
+            if (PauseMenu.IsGameplayPaused)
+            {
+                if (_ui == UiState.Morphing || _ui == UiState.Aiming) CancelAim();
+                return;
+            }
+
             EnsureNoCollisionBetweenNixAndEko();
 
-            // Ghost-mode Nix reports Grounded = false (physics is suspended); still, once she's
-            // back in control and touches ground, the summon recharges.
-            if (!_possessing && player.GroundedForRecoil) _spent = false;
+            // Reset per-airtime resources on ground touch. (Auto-retrieve after a dash is
+            // handled by TickAwaitingGround now — the phantom is standing at the arrow spot
+            // and orbs home with it.)
+            if (player.Grounded) _dashSpentThisAirtime = false;
 
-            // Keep Nix invuln topped up while she's ghosting (rather than one big grant that could
-            // race with an existing shorter timer).
-            if (_possessing && nixHealth != null) nixHealth.GrantInvuln(0.2f);
-
-            if (_possessing) UpdateWhilePossessing();
-            else UpdateWhileNixControlled();
-        }
-
-        // ------------------------------------------------------------------ Nix-side input
-        void UpdateWhileNixControlled()
-        {
-            // R2 with no arrow in hand sends Eko out to fetch, regardless of what Eko is doing —
-            // a planted phantom vanishes on the spot so the fetch orb can leave from where it
-            // stood; a dormant Eko sends the orb from Nix. Grounded-only (coyote counts): a
-            // desperate airborne R2 can't summon a fetch, since the whole return loop is meant
-            // to close on Nix's feet. Bow.Update already only fires R2 when Nix has an arrow, so
-            // this branch is unambiguous.
-            if (input.NixBowPressed && !bow.HasAnyArrow && !_fetching && player.GroundedForRecoil
-                && PlayerAbilities.RecallArrow)
+            switch (_ui)
             {
-                TryStartFetch();
-                return;
+                case UiState.Idle:            TickIdle();           break;
+                case UiState.Dashing:         TickDash();           break;
+                case UiState.Morphing:        TickMorph();          break;
+                case UiState.Aiming:          TickAim();            break;
+                case UiState.AwaitingGround:  TickAwaitingGround(); break;
             }
 
-            if (!input.EkoPressed) return;
-
-            if (eko.Active && eko.Frozen)
-            {
-                // Planted phantom out and Nix pressed L1 — fire it (or, if the shade-fire-arrow
-                // ability is locked, just dismiss the phantom back with an orb; the shade can
-                // still be summoned and planted, it just can't loose). The phantom always has a
-                // valid held aim (defaults to Eko's facing on summon, updates whenever the player
-                // aims during the possession), so this is unconditional now: previously a "never
-                // aimed → dismiss without firing" branch made it look like L1 was doing nothing,
-                // which is the opposite of what a player pressing L1 on a planted phantom expects.
-                if (PlayerAbilities.ShadeFireArrow) FirePhantom();
-                else eko.DismissWithOrb();
-                return;
-            }
-
-            if (!eko.Active && CanSummon && !_fetching && PlayerAbilities.MakeShade) BeginPossession();
+            // R2 fetch is independent of the phantom state (still allowed while phantom waits).
+            HandleFetch();
         }
 
-        /// <summary>Kick off the fetch orb. Bails silently if there's no downed arrow to grab
-        /// (Nix must be genuinely empty, not just aiming empty-handed at nothing). If a planted
-        /// phantom is out, the phantom is snapshotted and vanishes; the orb takes three legs
-        /// (phantom → arrow → Nix → phantom's old spot) and Eko reforms in the same setup at the
-        /// end, so a fetch mid-setup doesn't cost you the aim you'd lined up.</summary>
-        void TryStartFetch()
+        // ================================================================== Idle → tap-or-hold
+        void TickIdle()
         {
-            Arrow arrow = bow.LastFiredArrow;
-            if (arrow == null) return;
-
-            if (eko.Active && eko.Frozen)
+            if (input.EkoPressed)
             {
-                // Snapshot the phantom, vanish it (the burst doubles as the orb-separating beat),
-                // and fire the three-leg fetch that reforms it at the end.
-                Vector3 spot = eko.transform.position;
-                int facing = ekoPlayer.Facing;
-                Vector2 aim = eko.AimDirection;
-                bool hadAim = eko.HasAim;
-                eko.Vanish();
-                StartFetchAndReformPhantom(spot, arrow, spot, facing, aim, hadAim);
-                return;
+                _pressAt = Time.unscaledTime;
+                _consumedPressForHold = false;
             }
 
-            // Dormant Eko: plain two-leg fetch that leaves from Nix.
-            StartFetch(player.transform.position, arrow);
-        }
-
-        /// <summary>Two-leg orb fetch — out from <paramref name="from"/> to the downed arrow
-        /// (homing on its live visual centre so it always makes contact), then back to Nix. Each
-        /// leg takes a fixed <see cref="fetchLegDuration"/> regardless of distance.</summary>
-        void StartFetch(Vector3 from, Arrow arrow)
-        {
-            _fetching = true;
-            bool wasBlue = arrow.blue;
-            bool grabbed = false;   // did we actually take an arrow off the ground?
-
-            EkoOrb.Chase(from, () => ArrowCenter(arrow), fetchLegDuration, onArrive: () =>
+            // Hold detected while pressed: transition to Morphing if an arrow is available.
+            if (input.EkoHeld && !_consumedPressForHold
+                && Time.unscaledTime - _pressAt > tapHoldThreshold)
             {
-                Vector3 grabAt = arrow != null ? ArrowCenter(arrow) : player.transform.position;
-                if (arrow != null)
+                if (PlayerAbilities.MakeShade && bow.LastFiredArrow != null)
                 {
-                    grabbed = true;
-                    // MarkReclaimed silences Arrow.OnDestroy's safety-net re-grant: it fires for
-                    // an in-flight arrow being destroyed, and would hand Nix a fresh arrow the
-                    // instant the fetch orb touched the shot — the whole point of the fetch is
-                    // that the arrow rides the ORB back to her, so the grant belongs on the
-                    // return leg's onArrive below, not here. Landed pickups (`_stuck`) already
-                    // skip the safety net; this covers the in-flight case.
-                    arrow.MarkReclaimed();
-                    Destroy(arrow.gameObject);
+                    _consumedPressForHold = true;
+                    StartMorph(bow.LastFiredArrow);
+                    return;
                 }
+                _consumedPressForHold = true;   // no arrow to morph — swallow the hold cleanly
+            }
 
-                EkoOrb.Chase(grabAt, () => player.transform.position, fetchLegDuration, onArrive: () =>
+            // Tap release: dash to the arrow if it's stuck AND we haven't already dashed this airtime.
+            if (input.EkoReleased && !_consumedPressForHold)
+            {
+                Arrow a = bow.LastFiredArrow;
+                if (a != null && a.IsPickup && PlayerAbilities.MakeShade && !_dashSpentThisAirtime)
+                    StartDash(a);
+            }
+        }
+
+        // ================================================================== Dash (tap L1)
+        void StartDash(Arrow arrow)
+        {
+            _ui = UiState.Dashing;
+            _dashPhase = DashPhase.Throwing;
+            _dashTimer = 0f;
+            _dashArrow = arrow;
+            _dashStart = player.transform.position;
+            _dashTetherTarget = arrow.transform.position;
+
+            Vector3 flight = arrow.transform.right;
+            Vector3 arrowPos = arrow.transform.position;
+            int facing = flight.x >= 0f ? 1 : -1;
+            _dashEnd = arrowPos - flight.normalized * dashLandOffset;
+
+            _dashSpentThisAirtime = true;   // one grapple per airtime; resets on ground touch
+
+            // Eko materialises where the arrow is — he's the one throwing the tether. Aim UI
+            // stays off (this isn't a morph aim), and the phantom's PlayerController freezes so
+            // his transform doesn't drift. He'll stay standing there through the dash and the
+            // post-dash wait, so a follow-up hold-L1 can't spawn a SECOND phantom off the same
+            // arrow.
+            eko.Summon(arrowPos, facing);
+            ekoPlayer.SetFrozen(true);
+            SnapPhantomBody(arrowPos, facing);
+            eko.AimUiVisible = false;
+
+            player.SetFrozen(true);
+            player.SetIntangible(true);
+            if (nixHealth != null) nixHealth.GrantInvuln(tetherThrowDuration + DashDuration + dashInvuln);
+
+            // Tether starts as a zero-length line at Eko; the Throwing phase whips it out to Nix.
+            SpawnDashTether(arrowPos, arrowPos);
+            Sfx.Play(Sfx.Id.EkoZip, 1.05f);
+        }
+
+        void TickDash()
+        {
+            _dashTimer += Time.unscaledDeltaTime;
+
+            if (_dashPhase == DashPhase.Throwing)
+            {
+                // Tether whips out from Eko (fixed at the arrow spot) toward Nix's start
+                // position. Nix hasn't moved yet.
+                float u = Mathf.Clamp01(_dashTimer / Mathf.Max(0.01f, tetherThrowDuration));
+                float eased = Mathf.SmoothStep(0f, 1f, u);
+                Vector3 tetherEnd = Vector3.Lerp(_dashTetherTarget, _dashStart, eased);
+                if (_dashTether != null)
                 {
-                    // Only grant an arrow if we actually collected one — otherwise Nix reclaimed
-                    // it via walk-over mid-fetch and this second GiveArrow would duplicate the
-                    // stock (letting her fire a fresh arrow while the previous one is still in
-                    // the world). Handles the timing race between TryReclaim and this callback.
-                    if (grabbed) bow.GiveArrow(wasBlue);
-                    _fetching = false;
-                });
+                    _dashTether.SetPosition(0, _dashTetherTarget);
+                    _dashTether.SetPosition(1, tetherEnd);
+                }
+                if (u >= 1f) { _dashPhase = DashPhase.Travelling; _dashTimer = 0f; }
+                return;
+            }
+
+            // Travelling phase — Nix zips along the tether toward Eko/arrow.
+            float t = Mathf.Clamp01(_dashTimer / DashDuration);
+            float travelEased = Mathf.SmoothStep(0f, 1f, t);
+            Vector3 pos = Vector3.Lerp(_dashStart, _dashEnd, travelEased);
+            player.transform.position = pos;
+            if (player.Rb != null) player.Rb.position = pos;
+
+            if (_dashTether != null)
+            {
+                _dashTether.SetPosition(0, pos);
+                _dashTether.SetPosition(1, _dashTetherTarget);
+            }
+
+            if (t >= 1f) EndDash(reclaim: true);
+        }
+
+        void EndDash(bool reclaim)
+        {
+            player.SetIntangible(false);
+            player.SetFrozen(false);
+            DestroyDashTether();
+
+            if (reclaim && _dashArrow != null)
+            {
+                // Grant spectral. Arrow stays stuck. Phantom stays out at the arrow spot —
+                // transition to AwaitingGround so a follow-up hold-L1 can't spawn another
+                // phantom off the same arrow, and the ground-touch handler orbs the phantom
+                // home with the arrow.
+                bow.GiveArrow(blue: true);
+                _dashArrowPendingReturn = true;
+                _ui = UiState.AwaitingGround;
+            }
+            else
+            {
+                // Dash aborted — quietly retire the phantom too.
+                if (eko != null && eko.Active) eko.Vanish();
+                _ui = UiState.Idle;
+            }
+            _dashArrow = null;
+            _consumedPressForHold = false;
+        }
+
+        // ------------------------------------------------------------------ dash tether
+        void SpawnDashTether(Vector3 from, Vector3 to)
+        {
+            var go = new GameObject("DashTether");
+            go.transform.SetParent(transform, false);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.widthMultiplier = tetherWidth;
+            lr.numCapVertices = 4;
+            lr.textureMode = LineTextureMode.Stretch;
+            lr.alignment = LineAlignment.View;
+            lr.sortingOrder = 22;
+            lr.positionCount = 2;
+            lr.SetPosition(0, from);
+            lr.SetPosition(1, to);
+            lr.startColor = tetherColor;
+            lr.endColor = tetherColor;
+            go.AddComponent<ProceduralLine>();
+            _dashTether = lr;
+        }
+
+        void DestroyDashTether()
+        {
+            if (_dashTether != null) Destroy(_dashTether.gameObject);
+            _dashTether = null;
+        }
+
+        // ================================================================== Morph (hold L1)
+        void StartMorph(Arrow arrow)
+        {
+            _ui = UiState.Morphing;
+            _morphTimer = 0f;
+            _morphArrow = arrow;
+
+            Vector3 pos = arrow.transform.position;
+            Vector3 flight = arrow.transform.right;
+            int facing = flight.x >= 0f ? 1 : -1;
+
+            eko.Summon(pos, facing);
+            ekoPlayer.SetFrozen(true);
+            SnapPhantomBody(pos, facing);
+            eko.AimDirection = flight.sqrMagnitude > 0.0001f ? (Vector2)flight.normalized : Vector2.right;
+            eko.transform.localScale = Vector3.one * morphStartScale;
+            eko.AimUiVisible = false;   // hide reticle/preview during the morph animation
+
+            // Camera snaps to the phantom so the aim opens up already framed on Eko. The snap
+            // (not a smooth pan) is important — a smooth pan wouldn't finish before we freeze
+            // time on Aiming entry, leaving the aim off-center.
+            FocusCameraOn(eko.transform, snap: true);
+        }
+
+        void TickMorph()
+        {
+            // Hold released mid-morph = commit whatever the current aim is (fires spectral).
+            if (input.EkoReleased) { FirePhantomAndWait(); return; }
+
+            _morphTimer += Time.unscaledDeltaTime;
+            float u = Mathf.Clamp01(_morphTimer / Mathf.Max(0.01f, morphDuration));
+            float eased = Mathf.SmoothStep(0f, 1f, u);
+            eko.transform.localScale = Vector3.one * Mathf.Lerp(morphStartScale, 1f, eased);
+            if (_morphArrow != null) _morphArrow.transform.localScale = Vector3.one * (1f - eased);
+
+            if (u >= 1f) FinishMorph();
+        }
+
+        void FinishMorph()
+        {
+            if (_morphArrow != null)
+            {
+                _morphArrow.MarkReclaimed();
+                Destroy(_morphArrow.gameObject);
+                _morphArrow = null;
+            }
+            eko.transform.localScale = Vector3.one;
+            eko.AimUiVisible = true;
+
+            // Freeze the world for the aim. Save the current scale so a stacked hitstop can't
+            // trample it.
+            _savedTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+
+            _ui = UiState.Aiming;
+        }
+
+        // ================================================================== Aim (frozen time)
+        void TickAim()
+        {
+            UpdatePhantomAim();
+            if (input.EkoReleased) FirePhantomAndWait();
+        }
+
+        void UpdatePhantomAim()
+        {
+            Vector2 raw = GetRawAim();
+            if (raw.sqrMagnitude > 0.0001f) eko.AimDirection = raw.normalized;
+
+            if (Mathf.Abs(eko.AimDirection.x) > 0.1f)
+                ekoPlayer.SetFacing(eko.AimDirection.x > 0f ? 1 : -1);
+        }
+
+        Vector2 GetRawAim()
+        {
+            if (input.AimStickActive) return input.AimStickDirection;
+
+            if (input.MouseAiming && Mouse.current != null)
+            {
+                if (_cam == null) _cam = Camera.main;
+                if (_cam != null)
+                {
+                    Vector3 mp = Mouse.current.position.ReadValue();
+                    mp.z = -_cam.transform.position.z;
+                    Vector3 world = _cam.ScreenToWorldPoint(mp);
+                    Vector2 d = (Vector2)(world - eko.transform.position);
+                    if (d.sqrMagnitude > 0.0001f) return d;
+                }
+            }
+            return eko.AimDirection;
+        }
+
+        // ================================================================== Fire / cancel
+        void FirePhantomAndWait()
+        {
+            // If the release lands mid-morph, wipe the shrinking arrow now.
+            if (_morphArrow != null)
+            {
+                _morphArrow.MarkReclaimed();
+                Destroy(_morphArrow.gameObject);
+                _morphArrow = null;
+            }
+
+            // Loose the spectral shot. Purely spent-on-use — not registered as LastFiredArrow so
+            // it can't be dashed to or morphed. Its only job is catching Nix on the way for the
+            // bonus + air jump.
+            if (PlayerAbilities.ShadeFireArrow) eko.Loose(bow.ArrowSpeed(), player.Col);
+
+            // The phantom holds position after firing — no orb home yet. It watches Nix until
+            // she touches ground; that's the deliberate cost of the morph, and the trigger that
+            // hands her normal arrow back on return.
+            eko.AimUiVisible = false;
+            _ui = UiState.AwaitingGround;
+
+            // Time and camera come back to Nix.
+            RestoreTimeScale();
+            FocusCameraOn(player.transform, snap: false);   // smooth pan back — travel time is meaningful here
+            _consumedPressForHold = false;
+        }
+
+        void CancelAim()
+        {
+            if (_morphArrow != null)
+            {
+                _morphArrow.MarkReclaimed();
+                Destroy(_morphArrow.gameObject);
+                _morphArrow = null;
+            }
+            if (eko.Active) eko.Vanish();
+            RestoreTimeScale();
+            FocusCameraOn(player.transform, snap: false);
+            _ui = UiState.Idle;
+            _consumedPressForHold = false;
+        }
+
+        void RestoreTimeScale()
+        {
+            if (PauseMenu.IsGameplayPaused) return;
+            if (Time.timeScale == 0f) Time.timeScale = _savedTimeScale > 0f ? _savedTimeScale : 1f;
+        }
+
+        // ================================================================== Awaiting ground touch
+        void TickAwaitingGround()
+        {
+            if (!player.Grounded) return;
+
+            // Two flavours of "phantom is standing out waiting for Nix to land":
+            //  1. After a dash-tether — the arrow is still stuck at the phantom's spot; the
+            //     phantom orbs home carrying it, granting Nix her normal slot back.
+            //  2. After a hold-morph fire — the arrow was consumed by the morph; the phantom
+            //     orbs home empty-handed and hands the normal slot back on arrival.
+            if (_dashArrowPendingReturn) OrbPhantomHomeWithArrow();
+            else { eko.DismissWithOrb(); bow.GiveArrow(false); }
+
+            _ui = UiState.Idle;
+        }
+
+        /// <summary>Post-dash landing: the phantom is standing at the arrow spot and rides home
+        /// carrying it as one orb — the arrow's destroyed, the phantom's dismissed silently
+        /// (the orb IS the visual), and Nix's normal slot fills when the orb touches her.</summary>
+        void OrbPhantomHomeWithArrow()
+        {
+            _dashArrowPendingReturn = false;
+            Arrow a = bow.LastFiredArrow;
+            Vector3 from = eko.Active ? eko.transform.position : player.transform.position;
+
+            if (a != null)
+            {
+                a.MarkReclaimed();
+                Destroy(a.gameObject);
+            }
+            if (eko.Active) eko.Dismiss();   // silent — the chase orb below is the visual
+
+            _fetching = true;
+            EkoOrb.Chase(from, () => player.transform.position, fetchLegDuration, onArrive: () =>
+            {
+                bow.GiveArrow(false);
+                _fetching = false;
             });
         }
 
-        /// <summary>Three-leg fetch that reforms the phantom at <paramref name="reformAt"/> with
-        /// the snapshotted aim after handing the arrow back — the fetch borrows Eko without
-        /// dismantling a setup shot. Legs: <paramref name="from"/> → arrow → Nix → reformAt.</summary>
-        void StartFetchAndReformPhantom(Vector3 from, Arrow arrow, Vector3 reformAt,
-                                        int facing, Vector2 aim, bool hadAim)
+        // ================================================================== Fetch (R2)
+        void HandleFetch()
+        {
+            if (_ui != UiState.Idle && _ui != UiState.AwaitingGround) return;
+            if (!input.NixBowPressed) return;
+            if (bow.HasAnyArrow || _fetching) return;
+            if (!player.GroundedForRecoil || !PlayerAbilities.RecallArrow) return;
+
+            Arrow arrow = bow.LastFiredArrow;
+            if (arrow == null) return;
+            StartFetch(player.transform.position, arrow);
+        }
+
+        void StartFetch(Vector3 from, Arrow arrow)
         {
             _fetching = true;
             bool wasBlue = arrow.blue;
@@ -239,216 +536,38 @@ namespace NixAndEko.Combat
                 if (arrow != null)
                 {
                     grabbed = true;
-                    // MarkReclaimed silences Arrow.OnDestroy's safety-net re-grant: it fires for
-                    // an in-flight arrow being destroyed, and would hand Nix a fresh arrow the
-                    // instant the fetch orb touched the shot — the whole point of the fetch is
-                    // that the arrow rides the ORB back to her, so the grant belongs on the
-                    // return leg's onArrive below, not here. Landed pickups (`_stuck`) already
-                    // skip the safety net; this covers the in-flight case.
                     arrow.MarkReclaimed();
                     Destroy(arrow.gameObject);
                 }
 
                 EkoOrb.Chase(grabAt, () => player.transform.position, fetchLegDuration, onArrive: () =>
                 {
-                    // See StartFetch: only grant an arrow if we actually collected one, so a
-                    // walk-over reclaim that raced this fetch can't double up Nix's stock.
                     if (grabbed) bow.GiveArrow(wasBlue);
-
-                    EkoOrb.Chase(player.transform.position, () => reformAt, fetchLegDuration, onArrive: () =>
-                    {
-                        ReformPlantedPhantom(reformAt, facing, aim, hadAim);
-                        _fetching = false;
-                    });
+                    _fetching = false;
                 });
             });
         }
 
-        /// <summary>Re-materialise the phantom exactly where it was before a fetch trip, holding
-        /// the aim it had. Bypasses <see cref="BeginPossession"/> — this isn't a fresh summon and
-        /// mustn't spend a summon charge or hand control to Eko, only restore the planted state.</summary>
-        void ReformPlantedPhantom(Vector3 pos, int facing, Vector2 aim, bool hadAim)
+        // ================================================================== Camera
+        void FocusCameraOn(Transform target, bool snap)
         {
-            eko.Summon(pos, facing, player.groundMask);
-            SnapEkoBody(pos, facing);
-            eko.OverrideAim(aim, hadAim);
-            eko.FreezeInPlace();
+            if (_cameraFollow == null) _cameraFollow = FindAnyObjectByType<CameraFollow>();
+            if (_cameraFollow == null || target == null) return;
+            if (snap) _cameraFollow.SnapToTarget(target);
+            else _cameraFollow.target = target;
         }
 
-        // ------------------------------------------------------------------ Eko-side input
-        void UpdateWhilePossessing()
+        // ================================================================== helpers
+        void SnapPhantomBody(Vector3 pos, int facing)
         {
-            // Note: no walk-over arrow pickup during possession. Nix's dropped arrow is only
-            // retrieved by SHOOTING the frozen phantom with it (Eko.OnNixArrowHit) — a walking
-            // phantom just passes over the arrow without touching it. This keeps the retrieval
-            // beat a deliberate one-shot rather than an incidental collision.
-
-            // R2 during possession = "commit and fire" in one press — a shortcut for L1-then-L1.
-            // If the shade can't fire arrows (ability locked), collapse the shortcut to a plain
-            // FreezeAndReturn so R2 still hands control back cleanly instead of dead-ending.
-            if (ekoInput.NixBowPressed)
+            if (ekoPlayer.Rb != null)
             {
-                if (PlayerAbilities.ShadeFireArrow) FireImmediate();
-                else FreezeAndReturn();
-                return;
+                ekoPlayer.Rb.position = pos;
+                ekoPlayer.Rb.linearVelocity = Vector2.zero;
             }
-
-            // L1 while controlling Eko = hand control back to Nix, leave Eko planted with aim.
-            if (ekoInput.EkoPressed) FreezeAndReturn();
-        }
-
-        // ------------------------------------------------------------------ transitions
-        void BeginPossession()
-        {
-            _spent = true;
-            _possessing = true;
-            _carryingArrow = false;
-
-            Vector3 pos = player.transform.position;
-            eko.Summon(pos, player.Facing, player.groundMask);
-            SnapEkoBody(pos, player.Facing);
-
-            // Route input and swap cameras.
-            input.routed = false;
-            ekoInput.routed = true;
-            FollowTarget(ekoPlayer.transform);
-
-            // Nix goes ghost: frozen in place, invulnerable, translucent, crouched pose.
-            EnterGhostMode();
-        }
-
-        /// <summary>Hand control back to Nix, leaving Eko frozen where it is with its current aim.
-        /// Any arrow Eko was carrying goes back to Nix in the same beat.</summary>
-        void FreezeAndReturn()
-        {
-            _possessing = false;
-            ekoInput.routed = false;
-            input.routed = true;
-
-            eko.FreezeInPlace();
-            HandBackCarriedArrow();
-            ExitGhostMode();
-            FollowTarget(player.transform);
-        }
-
-        /// <summary>R2 shortcut during possession: freeze + return + fire immediately, so the
-        /// player can commit an aimed shot without the L1-then-L1 double beat.</summary>
-        void FireImmediate()
-        {
-            // Same wind-down as FreezeAndReturn, but the aim we fire on is whatever's live *now*
-            // (before we mark HasAim off). Force HasAim on so a straight R2 mash with no aim still
-            // fires along the default direction — the player asked to shoot, honour it.
-            _possessing = false;
-            ekoInput.routed = false;
-            input.routed = true;
-
-            eko.FreezeInPlace();
-            HandBackCarriedArrow();
-            ExitGhostMode();
-            FollowTarget(player.transform);
-
-            FirePhantom();
-        }
-
-        /// <summary>Nix-side L1 on a planted phantom: fire if it was aimed, otherwise just return.</summary>
-        void FireOrReturnPhantom()
-        {
-            if (eko.HasAim) FirePhantom();
-            else eko.DismissWithOrb();
-        }
-
-        void FirePhantom()
-        {
-            Transform homeTarget = PlayerOnPreviewLine() ? player.transform : null;
-            eko.Loose(bow.ArrowSpeed(), player.Col, homeTarget);
-            eko.DismissWithOrb();
-        }
-
-        /// <summary>Is Nix close enough to Eko's straight preview line — ahead of the phantom and
-        /// within <see cref="assistRadius"/> of the line — to earn a homing shot?</summary>
-        bool PlayerOnPreviewLine()
-        {
-            Vector2 origin = eko.transform.position;
-            Vector2 dir = eko.AimDirection;
-            Vector2 toPlayer = (Vector2)player.transform.position - origin;
-
-            float along = Vector2.Dot(toPlayer, dir);
-            if (along < assistMinDistance || along > eko.previewDistance) return false;
-
-            Vector2 perp = toPlayer - dir * along;
-            return perp.magnitude <= assistRadius;
-        }
-
-        // ------------------------------------------------------------------ Nix ghost mode
-        void EnterGhostMode()
-        {
-            // Snapshot Nix's velocity BEFORE SetFrozen zeroes it, so ExitGhostMode can hand it
-            // back and she resumes with whatever momentum she had at summon time.
-            _nixCachedVelocity = player.Velocity;
-
-            player.ForceGhostPose = true;
-            player.SetFrozen(true);
-            player.SetIntangible(true);   // ghost Nix: nothing collides with her, nothing senses her
-            if (nixSprite != null)
-            {
-                if (!_nixColorCached) { _nixOriginalColor = nixSprite.color; _nixColorCached = true; }
-                var c = _nixOriginalColor; c.a = ghostAlpha;
-                nixSprite.color = c;
-            }
-            if (nixHealth != null) nixHealth.GrantInvuln(9999f);
-        }
-
-        void ExitGhostMode()
-        {
-            player.SetIntangible(false);
-            player.SetFrozen(false);
-            // SetFrozen(false) zeroes velocity to wake cleanly — restore the pre-summon momentum
-            // AFTER it so a running/jumping Nix picks back up where she left off. Also drop her
-            // state machine into Fall if she was airborne when frozen, since Sense() hasn't run
-            // yet this frame and Idle would otherwise think she's grounded for one tick.
-            player.Velocity = _nixCachedVelocity;
-            if (_nixCachedVelocity.sqrMagnitude > 0.0001f)
-                player.Machine.ChangeState(_nixCachedVelocity.y > 0.01f ? (Core.IState)player.Jump : player.Fall);
-            player.ForceGhostPose = false;
-            if (nixSprite != null && _nixColorCached) nixSprite.color = _nixOriginalColor;
-            // Clear the huge invuln grant — leave a normal short one so she isn't hit instantly on wake.
-            if (nixHealth != null) nixHealth.GrantInvuln(0.3f);
-        }
-
-        // ------------------------------------------------------------------ helpers
-        /// <summary>Snap Eko's body to <paramref name="pos"/> facing <paramref name="facing"/> at
-        /// a dead stop — the transform, the interpolated rigidbody, and the state machine.</summary>
-        void SnapEkoBody(Vector3 pos, int facing)
-        {
-            ekoPlayer.SetFrozen(false);   // just in case a previous dismiss left it suspended
-            if (ekoPlayer.Rb != null) ekoPlayer.Rb.position = pos;
             ekoPlayer.transform.position = pos;
-            ekoPlayer.Velocity = Vector2.zero;
             ekoPlayer.SetFacing(facing);
             ekoPlayer.Machine.ChangeState(ekoPlayer.Idle);
-        }
-
-        void TryGrabArrow()
-        {
-            if (_carryingArrow) return;
-
-            Arrow arrow = bow.LastFiredArrow;
-            if (arrow == null) return;
-
-            Vector3 center = ArrowCenter(arrow);
-            if (Vector2.Distance(ekoPlayer.transform.position, center) > grabRadius) return;
-
-            Destroy(arrow.gameObject);
-            _carryingArrow = true;
-            Sfx.Play(Sfx.Id.EkoCatch);
-            Particle.Burst(center, Palette.Blue, 10, 5f);
-        }
-
-        void HandBackCarriedArrow()
-        {
-            if (!_carryingArrow) return;
-            bow.GiveArrow(false);
-            _carryingArrow = false;
         }
 
         static Vector3 ArrowCenter(Arrow arrow)
@@ -462,32 +581,7 @@ namespace NixAndEko.Combat
         {
             if (_ekoCol == null && ekoPlayer != null) _ekoCol = ekoPlayer.GetComponent<Collider2D>();
             if (player == null || player.Col == null || _ekoCol == null) return;
-            // Physics2D.IgnoreCollision is a per-pair write and Unity has no cheap "is this pair
-            // ignored?" query — just re-assert. The internal cost is a small hash lookup.
             Physics2D.IgnoreCollision(player.Col, _ekoCol, true);
-        }
-
-        /// <summary>Point the main camera at whoever's being controlled. Looked up lazily (and
-        /// cached) rather than wired at build time — the camera isn't set up yet when the player is
-        /// spawned; see <see cref="Level.LevelLoader"/> / the test-level builder.</summary>
-        void FollowTarget(Transform target)
-        {
-            if (_camera == null) _camera = FindAnyObjectByType<CameraFollow>();
-            if (_camera != null) _camera.target = target;
-        }
-
-        void OnDisable()
-        {
-            // Never leave the game soft-locked with Nix's input muted or her sprite ghosted.
-            if (_possessing)
-            {
-                _possessing = false;
-                if (ekoInput != null) ekoInput.routed = false;
-                if (input != null) input.routed = true;
-                ExitGhostMode();
-                if (eko != null && eko.Active) eko.Vanish();
-            }
-            _fetching = false;
         }
     }
 }

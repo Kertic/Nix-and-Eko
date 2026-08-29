@@ -16615,7 +16615,7 @@ MonoBehaviour:
   dragAnchorIndicator: {fileID: 320003213}
   trajectorySteps: 26
   trajectoryStep: 0.045
-  eightDirectional: 1
+  eightDirectional: 0
   aimHysteresis: 12
   dragDeadzonePixels: 14
   recoilMin: 4

@@ -73,9 +73,14 @@ namespace NixAndEko.Player
             // ---- Eko ball
             if (ekoBall != null)
             {
+                // Eko rides IN Nix's arrow now — the moment she fires (LastFiredArrow alive),
+                // Eko has left her side and is in the arrow. The head-orbit ball reflects that:
+                // hides when the phantom is out, when a fetch is in flight, OR when Nix's arrow
+                // is currently in the world (Eko's riding it, not with her).
                 bool ekoDeployed = eko != null && eko.Active;
                 bool ekoFetching = summoner != null && summoner.Fetching;
-                bool showBall = !ekoDeployed && !ekoFetching;
+                bool ekoInArrow  = bow != null && bow.LastFiredArrow != null;
+                bool showBall = !ekoDeployed && !ekoFetching && !ekoInArrow;
 
                 if (ekoBallRenderer != null && ekoBallRenderer.enabled != showBall)
                     ekoBallRenderer.enabled = showBall;

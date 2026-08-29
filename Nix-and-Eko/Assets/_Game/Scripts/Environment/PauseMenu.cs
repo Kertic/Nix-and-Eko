@@ -279,7 +279,15 @@ namespace NixAndEko.Environment
 
             if (freezeTimeScale)
             {
-                if (open) { _savedTimeScale = Time.timeScale; Time.timeScale = 0f; }
+                if (open)
+                {
+                    // Save a SAFE scale to restore to. If something else was already at 0 (a
+                    // hitstop, the bullet-time aim in EkoSummoner) then blindly saving 0 would
+                    // leave the game frozen after pause closes. Clamp up to 1 — the game never
+                    // legitimately runs at a scale other than 1 outside these brief freezes.
+                    _savedTimeScale = Time.timeScale > 0f ? Time.timeScale : 1f;
+                    Time.timeScale = 0f;
+                }
                 else Time.timeScale = _savedTimeScale;
             }
         }

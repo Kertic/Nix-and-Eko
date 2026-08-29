@@ -70,11 +70,16 @@ namespace NixAndEko.Util
             GUILayout.Label("  Mouse aims. LMB = Nix Bow, RMB = Nix Melee, Q = Eko", style);
             GUILayout.Label("Gamepad: stick/d-pad move  X jump  O crouch", style);
             GUILayout.Label("  Right stick aims. R2 = Nix Bow, R1 = Nix Melee, L1 = Eko", style);
-            GUILayout.Label("L1 = possess Eko (walks/jumps, aim with stick/mouse).", style);
-            GUILayout.Label("  While possessing: L1 = plant Eko (return to Nix, aim kept).", style);
-            GUILayout.Label("  While possessing: R2 = plant + fire in one press.", style);
-            GUILayout.Label("  Nix + planted Eko: L1 = fire the phantom's shot.", style);
-            GUILayout.Label("  Nix with no arrow: R2 = send Eko to fetch (phantom vanishes first).", style);
+            GUILayout.Label("Eko rides Nix's arrow. Bright blue = normal, pale = spectral.", style);
+            GUILayout.Label("  L1 tap (once/airtime): Eko appears at arrow, THROWS a tether.", style);
+            GUILayout.Label("    Nix zips along it, gets spectral bonus, arrow stays stuck.", style);
+            GUILayout.Label("    Phantom stands there; hold-L1 is locked out until Nix lands.", style);
+            GUILayout.Label("    On landing: phantom orbs home with the arrow, normal restored.", style);
+            GUILayout.Label("  L1 hold: arrow MORPHS; camera focus; morph done -> TIME FREEZES.", style);
+            GUILayout.Label("  Aim is full 360. Release L1: phantom fires spectral, holds spot.", style);
+            GUILayout.Label("  Spectral catches Nix -> +spectral slot, momentum, +1 air jump.", style);
+            GUILayout.Label("  Nix lands: phantom orbs home + your normal arrow returns.", style);
+            GUILayout.Label("  Walk-over pickup is OFF. R2 (grounded, no arrow) = Eko fetch.", style);
             GUILayout.EndArea();
         }
     }
