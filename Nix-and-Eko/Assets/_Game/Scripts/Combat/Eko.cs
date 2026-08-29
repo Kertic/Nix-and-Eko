@@ -157,6 +157,12 @@ namespace NixAndEko.Combat
         }
 
         // ------------------------------------------------------------------ firing
+        /// <summary>Loose the phantom's shot along the held aim. The arrow is BOTH a Nix arrow
+        /// (persistent — becomes a pickup when it lands, so Nix can dash to it or fetch it) AND
+        /// an Eko arrow (catches Nix on the way for the bonus slot + momentum + air jump via
+        /// <see cref="EkoArrowTarget"/>). If the shot never lands and never catches, the
+        /// safety-net grant on <see cref="Arrow.OnDestroy"/> hands Nix her normal arrow back,
+        /// so the morph → fire cycle can never soft-lock her out of ammo.</summary>
         public Arrow Loose(float speed, Collider2D nixCol)
         {
             if (arrowPrefab == null)
@@ -170,9 +176,11 @@ namespace NixAndEko.Combat
             arrow.gameObject.SetActive(true);
             arrow.flyStraight = true;
             arrow.isEkoArrow = true;
-            arrow.blue = true;
+            arrow.blue = false;                              // stays visually blue via ApplyTint(isNixArrow)
             arrow.ekoAim = AimDirection;
-            arrow.SetCatchTarget(nixCol);
+            if (nixBow != null && nixCol != null)
+                arrow.SetNixArrow(nixBow, nixCol, false);    // persistent + pickup + safety-net grant
+            arrow.SetCatchTarget(nixCol);                    // still catches Nix for the bonuses
             arrow.Launch(AimDirection * speed, 1f);
             return arrow;
         }

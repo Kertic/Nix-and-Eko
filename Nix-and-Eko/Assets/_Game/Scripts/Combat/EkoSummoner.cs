@@ -48,14 +48,20 @@ namespace NixAndEko.Combat
         public float tapHoldThreshold = 0.15f;
 
         [Header("Dash to arrow (tap L1)")]
-        [Tooltip("Seconds the dash lerp takes.")]
-        public float dashDuration = 0.15f;
         [Tooltip("How far past the arrow's tip Nix lands (world units, along the reverse of the " +
                  "arrow's flight direction). Keeps her from ending inside the wall the arrow's " +
                  "embedded in.")]
         public float dashLandOffset = 0.7f;
         [Tooltip("Bonus invulnerability granted for the dash + a short landing grace.")]
         public float dashInvuln = 0.35f;
+        [Tooltip("Bright-blue tether tint that zips from Nix to the arrow during the dash.")]
+        public Color tetherColor = new Color(0.4f, 0.85f, 1f, 1f);
+        [Tooltip("Line width of the tether, in world units.")]
+        public float tetherWidth = 0.15f;
+
+        /// <summary>Dash travel time, locked to the fetch orb's single-leg duration so the
+        /// dash and a recall feel like matching motions.</summary>
+        float DashDuration => Mathf.Max(0.01f, fetchLegDuration);
 
         [Header("Morph (hold L1)")]
         [Tooltip("Seconds the arrow-to-phantom morph animation takes (unscaled).")]
@@ -87,7 +93,9 @@ namespace NixAndEko.Combat
         float _dashTimer;
         Vector3 _dashStart;
         Vector3 _dashEnd;
+        Vector3 _dashTetherTarget;      // where the tether's far end is anchored (arrow's spot)
         Arrow _dashArrow;
+        LineRenderer _dashTether;       // spawned on dash start, destroyed on end
 
         // Morph / aim state
         float _morphTimer;
@@ -117,6 +125,7 @@ namespace NixAndEko.Combat
             // Never leave time frozen or Nix intangible if this component tears down mid-flow.
             if (_ui == UiState.Morphing || _ui == UiState.Aiming) RestoreTimeScale();
             if (_ui == UiState.Dashing) EndDash(reclaim: false);
+            DestroyDashTether();
             if (eko != null && eko.Active) eko.Dismiss();
             _ui = UiState.Idle;
             _consumedPressForHold = false;
@@ -186,24 +195,36 @@ namespace NixAndEko.Combat
             _dashTimer = 0f;
             _dashArrow = arrow;
             _dashStart = player.transform.position;
+            _dashTetherTarget = arrow.transform.position;
 
             Vector3 flight = arrow.transform.right;
             _dashEnd = arrow.transform.position - flight.normalized * dashLandOffset;
 
             player.SetFrozen(true);           // no state ticks, no physics motion
             player.SetIntangible(true);       // out of the simulation while the transform lerps
-            if (nixHealth != null) nixHealth.GrantInvuln(dashDuration + dashInvuln);
+            if (nixHealth != null) nixHealth.GrantInvuln(DashDuration + dashInvuln);
+
+            SpawnDashTether(_dashStart, _dashTetherTarget);
             Sfx.Play(Sfx.Id.EkoZip, 1.05f);
         }
 
         void TickDash()
         {
             _dashTimer += Time.unscaledDeltaTime;
-            float u = Mathf.Clamp01(_dashTimer / Mathf.Max(0.01f, dashDuration));
+            float u = Mathf.Clamp01(_dashTimer / DashDuration);
             float eased = Mathf.SmoothStep(0f, 1f, u);
             Vector3 pos = Vector3.Lerp(_dashStart, _dashEnd, eased);
             player.transform.position = pos;
             if (player.Rb != null) player.Rb.position = pos;   // keep the frozen body in sync
+
+            // Tether: near end tracks Nix's live position, far end stays anchored on the arrow.
+            // Reads as "Nix being reeled in along the blue line" — the same feel as the fetch orb
+            // travelling out, but visualised as a tether instead of an orb.
+            if (_dashTether != null)
+            {
+                _dashTether.SetPosition(0, pos);
+                _dashTether.SetPosition(1, _dashTetherTarget);
+            }
 
             if (u >= 1f) EndDash(reclaim: true);
         }
@@ -212,6 +233,7 @@ namespace NixAndEko.Combat
         {
             player.SetIntangible(false);
             player.SetFrozen(false);
+            DestroyDashTether();
 
             if (reclaim && _dashArrow != null)
             {
@@ -222,6 +244,36 @@ namespace NixAndEko.Combat
             _dashArrow = null;
             _ui = UiState.Idle;
             _consumedPressForHold = false;
+        }
+
+        // ------------------------------------------------------------------ dash tether
+        void SpawnDashTether(Vector3 from, Vector3 to)
+        {
+            var go = new GameObject("DashTether");
+            go.transform.SetParent(transform, false);
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.widthMultiplier = tetherWidth;
+            lr.numCapVertices = 4;
+            lr.textureMode = LineTextureMode.Stretch;
+            lr.alignment = LineAlignment.View;
+            lr.sortingOrder = 22;
+            lr.positionCount = 2;
+            lr.SetPosition(0, from);
+            lr.SetPosition(1, to);
+            lr.startColor = tetherColor;
+            lr.endColor = tetherColor;
+            // ProceduralLine assigns a valid Sprites/Default material so the LineRenderer
+            // draws in Play Mode without a material asset to reference — same pattern the
+            // Bow trajectory and Eko preview use.
+            go.AddComponent<ProceduralLine>();
+            _dashTether = lr;
+        }
+
+        void DestroyDashTether()
+        {
+            if (_dashTether != null) Destroy(_dashTether.gameObject);
+            _dashTether = null;
         }
 
         // ================================================================== Morph (hold L1)
@@ -361,7 +413,15 @@ namespace NixAndEko.Combat
                 _morphArrow = null;
             }
 
-            if (PlayerAbilities.ShadeFireArrow) eko.Loose(bow.ArrowSpeed(), player.Col);
+            if (PlayerAbilities.ShadeFireArrow)
+            {
+                // The phantom's shot IS Nix's arrow relocated (see Eko.Loose). Register it as
+                // the new LastFiredArrow so the next L1 tap dashes to it and R2 recalls it —
+                // and so a shot that never lands falls back through Arrow's safety-net grant,
+                // handing Nix her normal arrow back rather than soft-locking her out.
+                Arrow shot = eko.Loose(bow.ArrowSpeed(), player.Col);
+                if (shot != null) bow.SetLastFiredArrow(shot);
+            }
             eko.DismissWithOrb();
             RestoreTimeScale();
             _ui = UiState.Idle;

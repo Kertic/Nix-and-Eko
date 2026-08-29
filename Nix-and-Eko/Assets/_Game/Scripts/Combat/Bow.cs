@@ -91,6 +91,11 @@ namespace NixAndEko.Combat
         /// <summary>The last <em>normal</em> arrow Nix fired that's now lying in the world to be reclaimed (null once picked up / gone).</summary>
         public Arrow LastFiredArrow { get; private set; }
 
+        /// <summary>Register a phantom-fired shot as Nix's new persistent arrow — updates
+        /// <see cref="LastFiredArrow"/> so L1 dash and R2 fetch can find it. Called by
+        /// <see cref="EkoSummoner"/> right after <see cref="Eko.Loose"/>.</summary>
+        public void SetLastFiredArrow(Arrow arrow) => LastFiredArrow = arrow;
+
         Camera _cam;
         bool _snapNow;                     // skip hysteresis for one frame (fresh stick flick)
         bool _aimFromStickLast;
