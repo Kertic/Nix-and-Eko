@@ -43,11 +43,24 @@ namespace NixAndEko.Combat
         public float trajectoryStep = 0.045f;
 
         [Header("Aim")]
-        [Tooltip("Snap firing to 8 directions (N, NE, E, SE, S, SW, W, NW).")]
-        public bool eightDirectional = true;
-        [Tooltip("Extra degrees past a sector boundary the aim must travel before switching direction. Prevents flicker at the 45° edges. Overridden by PlayerConfig when present.")]
+        [Tooltip("Snap firing to 8 directions (N, NE, E, SE, S, SW, W, NW). Off by default now " +
+                 "that Nix aims omni like the phantom.")]
+        public bool eightDirectional = false;
+        [Tooltip("Extra degrees past a sector boundary the aim must travel before switching " +
+                 "direction. Ignored when eightDirectional is off. Overridden by PlayerConfig " +
+                 "when present.")]
         [Range(0f, 22f)]
         public float aimHysteresis = 12f;
+
+        [Header("Aim assist (homing)")]
+        [Tooltip("Perpendicular tolerance (world units): a target this close to the shot's aim " +
+                 "line qualifies. Zero disables homing.")]
+        public float assistRadius = 1.5f;
+        [Tooltip("Along-aim minimum distance: targets closer than this can't hijack the shot " +
+                 "(keeps a point-blank fire from snapping onto whoever's on top of you).")]
+        public float assistMinDistance = 1.0f;
+        [Tooltip("Along-aim maximum distance: targets past this are out of assist range.")]
+        public float assistMaxDistance = 30f;
 
         [Header("Recoil")]
         [Tooltip("Velocity the player is set to (opposite the shot) on firing — a dash-style burst, not an add-on. Overridden by PlayerConfig when present.")]
@@ -357,6 +370,15 @@ namespace NixAndEko.Combat
 
             arrow.flyStraight = true;   // Nix's arrows now ignore gravity, just like Eko's.
             arrow.SetNixArrow(this, player != null ? player.Col : null, blue);
+
+            // Aim assist — if a live enemy or an active phantom sits inside the shot's cone,
+            // the arrow curves onto it and phases through everything else. Enemies for damage,
+            // the phantom for the ally interaction.
+            Transform homing = AimAssist.FindTarget(Origin, aimDir,
+                player != null ? player.transform : null,
+                assistRadius, assistMinDistance, assistMaxDistance);
+            if (homing != null) arrow.HomeTo(homing);
+
             arrow.Launch(aimDir * arrowSpeed, 1f);
             ApplyRecoil(aimDir, 1f);
             Sfx.Play(Sfx.Id.Bow, blue ? 1.15f : 1f);

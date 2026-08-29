@@ -45,6 +45,15 @@ namespace NixAndEko.Combat
         public Color previewColor = new Color(0.35f, 0.75f, 1f, 0.9f);
         public Color aimColor     = new Color(0.35f, 0.75f, 1f, 1f);
 
+        [Header("Aim assist (homing)")]
+        [Tooltip("Perpendicular tolerance (world units) for the phantom's shot to home in on a " +
+                 "target. Zero disables homing.")]
+        public float assistRadius = 1.5f;
+        [Tooltip("Along-aim minimum distance for aim assist to engage.")]
+        public float assistMinDistance = 1.0f;
+        [Tooltip("Along-aim maximum distance for aim assist to engage.")]
+        public float assistMaxDistance = 30f;
+
         static readonly Color phantomTint = new Color(0.4f, 0.85f, 1f, 0.85f);
         const int PhantomSortingOrder = 11;
         const float CatchHitstop = 0.1f;
@@ -188,6 +197,13 @@ namespace NixAndEko.Combat
             arrow.blue = true;                       // spectral tint via ApplyTint; spent on use
             arrow.ekoAim = AimDirection;
             arrow.SetCatchTarget(nixCol);            // catches Nix for the bonuses
+
+            // Aim assist for the phantom's shot: a live enemy or Nix inside the cone hijacks
+            // the arrow. Shooter is the phantom, so it doesn't home to itself.
+            Transform homing = AimAssist.FindTarget(transform.position, AimDirection, transform,
+                assistRadius, assistMinDistance, assistMaxDistance);
+            if (homing != null) arrow.HomeTo(homing);
+
             arrow.Launch(AimDirection * speed, 1f);
             return arrow;
         }

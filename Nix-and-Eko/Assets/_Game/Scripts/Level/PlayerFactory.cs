@@ -162,7 +162,7 @@ namespace NixAndEko.Level
             bow.input = reader;
             bow.muzzle = muzzle.transform;
             bow.arrowPrefab = arrowTemplate;
-            bow.eightDirectional = true;
+            bow.eightDirectional = false;   // omni aim, matching the phantom
 
             // Reticle: points along the snapped aim, tinting white -> red with charge.
             var indicatorGo = new GameObject("AimIndicator");
