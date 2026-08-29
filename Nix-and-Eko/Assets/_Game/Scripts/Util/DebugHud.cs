@@ -70,11 +70,13 @@ namespace NixAndEko.Util
             GUILayout.Label("  Mouse aims. LMB = Nix Bow, RMB = Nix Melee, Q = Eko", style);
             GUILayout.Label("Gamepad: stick/d-pad move  X jump  O crouch", style);
             GUILayout.Label("  Right stick aims. R2 = Nix Bow, R1 = Nix Melee, L1 = Eko", style);
-            GUILayout.Label("L1 = possess Eko (walks/jumps, aim with stick/mouse).", style);
-            GUILayout.Label("  While possessing: L1 = plant Eko (return to Nix, aim kept).", style);
-            GUILayout.Label("  While possessing: R2 = plant + fire in one press.", style);
-            GUILayout.Label("  Nix + planted Eko: L1 = fire the phantom's shot.", style);
-            GUILayout.Label("  Nix with no arrow: R2 = send Eko to fetch (phantom vanishes first).", style);
+            GUILayout.Label("Eko rides inside Nix's arrow. Every arrow is bright blue.", style);
+            GUILayout.Label("  L1 tap (arrow stuck): DASH Nix to the arrow, reclaim it.", style);
+            GUILayout.Label("  L1 hold: arrow MORPHS into the phantom, TIME FREEZES, aim.", style);
+            GUILayout.Label("  L1 release (from hold): phantom fires a blue arrow along your aim.", style);
+            GUILayout.Label("  Blue shot catches Nix -> bonus arrow + momentum + +1 air jump.", style);
+            GUILayout.Label("  Walk-over pickup is OFF; use L1 tap or R2 fetch.", style);
+            GUILayout.Label("  Nix with no arrow (grounded): R2 = send Eko fetch her arrow.", style);
             GUILayout.EndArea();
         }
     }

@@ -72,9 +72,14 @@ namespace NixAndEko.Player
         public bool NixBowPressed { get; private set; }
         /// <summary>True while the Nix Bow button is held.</summary>
         public bool NixBowHeld { get; private set; }
-        /// <summary>The frame the Eko button (Square / Q) went down — plants Eko where Nix stands and
-        /// hands control to it.</summary>
+        /// <summary>The frame the Eko button (Square / Q) went down.</summary>
         public bool EkoPressed { get; private set; }
+        /// <summary>True while the Eko button is held. Used by <see cref="Combat.EkoSummoner"/>
+        /// to distinguish tap (dash-to-arrow) from hold (morph phantom + aim in frozen time).</summary>
+        public bool EkoHeld { get; private set; }
+        /// <summary>The frame the Eko button was released. Fires the phantom's shot when the
+        /// hold was long enough that the morph completed.</summary>
+        public bool EkoReleased { get; private set; }
         /// <summary>The frame the Nix Melee button (R1 / RMB) went down — melee combo, or a roll when unarmed.</summary>
         public bool MeleePressed { get; private set; }
 
@@ -132,7 +137,7 @@ namespace NixAndEko.Player
             if (manageActionMapLifecycle) actions?.FindActionMap("Player")?.Disable();
             AimStickActive = false;
             GlideHeld = false;
-            NixBowPressed = NixBowHeld = EkoPressed = MeleePressed = false;
+            NixBowPressed = NixBowHeld = EkoPressed = EkoHeld = EkoReleased = MeleePressed = false;
         }
 
         void Update()
@@ -152,7 +157,7 @@ namespace NixAndEko.Player
                 AimStickActive = false;
                 MouseAiming = false;
                 JumpPressed = false;
-                NixBowPressed = NixBowHeld = EkoPressed = MeleePressed = false;
+                NixBowPressed = NixBowHeld = EkoPressed = EkoHeld = EkoReleased = MeleePressed = false;
                 GlideHeld = false;
                 CrouchHeld = false;
                 InteractPressed = false;
@@ -169,6 +174,8 @@ namespace NixAndEko.Player
             NixBowPressed = _nixBow != null && _nixBow.WasPressedThisFrame();
             NixBowHeld = _nixBow != null && _nixBow.IsPressed();
             EkoPressed = _eko != null && _eko.WasPressedThisFrame();
+            EkoHeld = _eko != null && _eko.IsPressed();
+            EkoReleased = _eko != null && _eko.WasReleasedThisFrame();
             MeleePressed = _melee != null && _melee.WasPressedThisFrame();
 
             UpdateAim();

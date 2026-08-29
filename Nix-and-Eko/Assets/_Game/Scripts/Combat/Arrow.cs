@@ -139,7 +139,10 @@ namespace NixAndEko.Combat
 
         void ApplyTint()
         {
-            if (!blue) return;
+            // Every Nix arrow reads as an Eko arrow now — the "normal" arrow is the bright
+            // blue one you're used to. The gameplay distinction between the normal slot and
+            // the bonus blue slot is preserved via `blue`; only the visual is unified.
+            if (!blue && !isNixArrow) return;
             var sr = GetComponentInChildren<SpriteRenderer>();
             if (sr != null) sr.color = blueTint;
         }
@@ -203,18 +206,11 @@ namespace NixAndEko.Combat
             if (_homingTarget != null) HomingSteer();
         }
 
-        /// <summary>Reclaim a landed Nix arrow once she walks close enough to it.</summary>
-        void TryReclaim()
-        {
-            if (_pickupBow == null) return;
-            Vector2 target = _playerCol != null ? (Vector2)_playerCol.bounds.center
-                           : (Vector2)transform.position;
-            if (Vector2.Distance(target, transform.position) > pickupRadius) return;
-
-            _reclaimed = true;
-            _pickupBow.GiveArrow(blue);
-            Destroy(gameObject);
-        }
+        /// <summary>Walk-over pickup is intentionally disabled on the "Eko dashes to the arrow"
+        /// branch — retrieval is deliberate now (L1 tap to dash to the arrow, or R2 to send
+        /// Eko fetching). A stuck arrow sits as a pickup marker in the world until one of those
+        /// consumes it.</summary>
+        void TryReclaim() { /* no-op — see summary */ }
 
         /// <summary>
         /// Detect an Eko arrow catching Nix by overlap (physical collision with her is ignored, so

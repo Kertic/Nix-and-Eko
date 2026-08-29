@@ -36,7 +36,14 @@ namespace NixAndEko.Combat
                 // momentum boost, distinct from Nix's own recoil which kicks opposite the shot.
                 bow.EkoLaunch(arrow.ekoAim, arrow.charge);
             }
-            if (player != null) player.RefillGlide();
+            if (player != null)
+            {
+                player.RefillGlide();
+                // Bank a second jump. Fall/JumpState's TryAirJump will cash it in on the next
+                // jump press. Grounded UpdateTimers clears this back to 0, so a catch you never
+                // spent before landing doesn't carry across airtimes.
+                player.ExtraJumps++;
+            }
             Particle.Burst(transform.position, burstColor, burstCount, burstSpeed);
             Sfx.Play(Sfx.Id.EkoCatch);
             return false;

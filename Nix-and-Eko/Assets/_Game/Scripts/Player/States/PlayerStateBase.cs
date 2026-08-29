@@ -50,6 +50,25 @@ namespace NixAndEko.Player.States
             return true;
         }
 
+        /// <summary>
+        /// Airborne button-jump backed by <see cref="PlayerController.ExtraJumps"/> — a banked
+        /// jump the Eko-arrow catch (see <see cref="Combat.EkoArrowTarget"/>) grants Nix. Consumes
+        /// one bank on each successful use, launches at <see cref="PlayerConfig.JumpLaunchSpeed"/>,
+        /// and re-enters <see cref="PlayerController.Jump"/> so the rise reads as a fresh jump.
+        /// No-ops during an input lock so a recoil burst can't be cancelled by a stray buffered
+        /// press. Returns true if it changed state.
+        /// </summary>
+        protected bool TryAirJump()
+        {
+            if (!P.BufferedJump || P.ExtraJumps <= 0 || P.InputLockTimer > 0f) return false;
+
+            P.ExtraJumps--;
+            P.ConsumeJumpBuffer();
+            P.Velocity = new Vector2(P.Velocity.x, Cfg.JumpLaunchSpeed);
+            P.Machine.ChangeState(P.Jump);
+            return true;
+        }
+
         /// <summary>Are we pushing into a wall we're touching, while airborne?</summary>
         protected bool WantsWallSlide()
         {

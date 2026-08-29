@@ -2,128 +2,74 @@ using NixAndEko.Environment;
 using NixAndEko.Player;
 using NixAndEko.Util;
 using UnityEngine;
-using UnityEngine.InputSystem;
-using Hitstop = NixAndEko.Util.Hitstop; // fully-qualify away any future ambiguity
+using Hitstop = NixAndEko.Util.Hitstop;
 
 namespace NixAndEko.Combat
 {
     /// <summary>
-    /// Eko: a faerie (they/them). Lives on the phantom's own GameObject alongside its
-    /// <see cref="PlayerController"/>, and switches between three states across a possession cycle:
+    /// Eko: a faerie (they/them) who rides <em>inside</em> Nix's arrow. Every Nix arrow is
+    /// visually blue for that reason — Eko is nested in it. See <see cref="EkoSummoner"/> for
+    /// the three-way L1 flow: tap dashes Nix to the stuck arrow, hold morphs the arrow into
+    /// the phantom for a frozen-time aimed shot.
     ///
-    /// <list type="bullet">
-    /// <item><b>Dormant</b> — <see cref="Active"/> false, GameObject hidden.</item>
-    /// <item><b>Live (possessed)</b> — <see cref="Active"/> true, <see cref="Frozen"/> false. The
-    /// player is walking / jumping Eko around under its own controller; this component tracks the
-    /// aim direction (right stick / mouse) and draws a straight preview line for Eko's own arrow
-    /// (Eko's arrows ignore gravity, so it really is dead straight). Eko can't fire during this
-    /// phase — L1 hands control back to Nix instead. See <see cref="EkoSummoner"/>.</item>
-    /// <item><b>Planted (frozen)</b> — <see cref="Active"/> true, <see cref="Frozen"/> true. Eko
-    /// stands where the player left them, with whatever aim they were holding at handoff still on
-    /// them, waiting for Nix's L1 to loose the shot. Rigidbody is suspended so it hovers exactly
-    /// where it stopped — an air shot Nix set up stays put for her to fire.</item>
-    /// </list>
-    ///
-    /// Eko's phantom is always considered armed — the preview / firing don't depend on Nix's own
-    /// ammo state (Eko fires its own blue arrows regardless).
+    /// <para><b>Phantom states</b></para>
+    /// While <see cref="Active"/> is true, the phantom stands frozen at the arrow's position.
+    /// <see cref="EkoSummoner"/> writes <see cref="AimDirection"/> every frame from Nix's own
+    /// input reader (stick or mouse relative to the phantom's world position) and this component
+    /// draws the reticle + straight-line preview. On release, <see cref="Loose"/> fires a blue
+    /// arrow along the held aim; the arrow's catch target is Nix, so a shot that connects still
+    /// runs through <see cref="EkoArrowTarget"/> for the reload + momentum + <b>+1 air jump</b>.
     /// </summary>
     public class Eko : MonoBehaviour
     {
         [Header("References")]
         public SpriteRenderer sprite;
-        [Tooltip("Straight-line preview of Eko's next shot.")]
-        public LineRenderer trajectory;
         public Arrow arrowPrefab;
-        [Tooltip("Reticle shown while the player is aiming Eko.")]
+        [Tooltip("Reticle shown while aiming the phantom.")]
         public Transform aimIndicator;
         public SpriteRenderer aimIndicatorRenderer;
-        [Tooltip("Nix — the return home target for the DismissWithOrb visual.")]
+        [Tooltip("Straight-line preview of Eko's next shot.")]
+        public LineRenderer trajectory;
+        [Tooltip("Nix — orb-home target on dismiss.")]
         public PlayerController player;
-        [Tooltip("Eko's own controller — set by PlayerFactory; used to source the current facing " +
-                 "when picking a default aim direction.")]
+        [Tooltip("Eko's own controller — set by PlayerFactory; frozen throughout.")]
         public PlayerController ekoPlayer;
-        [Tooltip("Eko's own input reader — right stick / mouse aim comes through here, same as " +
-                 "Nix's Bow reads its own reader.")]
-        public PlayerInputReader ekoInput;
-        [Tooltip("Nix's bow — read for the arrow launch speed only, so Eko's arrows fly at the " +
-                 "same speed as the rest of the game.")]
+        [Tooltip("Nix's bow — read for arrow launch speed so Eko's blues match Nix's shot speed.")]
         public Bow nixBow;
-        [Tooltip("Small dot markers dropped wherever the preview crosses clean through a one-way " +
-                 "platform instead of stopping there.")]
-        public Transform[] passThroughMarkers;
 
         [Header("Look")]
         [Tooltip("How far the straight preview reaches before giving up.")]
         public float previewDistance = 40f;
         [Tooltip("How far off Eko the reticle sits along the current aim.")]
         public float indicatorDistance = 1.4f;
-        [Tooltip("Snap Eko's aim to 8 directions (N, NE, E, ...).")]
-        public bool eightDirectional = true;
-        [Tooltip("Extra degrees past a sector boundary the aim must travel before switching " +
-                 "direction (anti-flicker).")]
-        [Range(0f, 22f)]
-        public float aimHysteresis = 12f;
         public Color previewColor = new Color(0.35f, 0.75f, 1f, 0.9f);
-        public Color aimColor = new Color(0.35f, 0.75f, 1f, 1f);
+        public Color aimColor     = new Color(0.35f, 0.75f, 1f, 1f);
 
-        // Freeze-frame length (real seconds) for the Eko-catches-Nix boost, kept as a code
-        // constant so recompiles always apply (a serialized field would be baked into a scene's
-        // Eko at build time and ignore edits until scene rebuild).
+        static readonly Color phantomTint = new Color(0.4f, 0.85f, 1f, 0.85f);
+        const int PhantomSortingOrder = 11;
         const float CatchHitstop = 0.1f;
 
-        // Fully opaque translucent-echo colour while the player is driving Eko.
-        static readonly Color liveTint = new Color(0.4f, 0.8f, 1f, 0.9f);
-        // A hair dimmer while planted and waiting to fire — reads as "held, not owned".
-        static readonly Color frozenTint = new Color(0.4f, 0.8f, 1f, 0.7f);
-        const int PhantomSortingOrder = 11;
-
-        /// <summary>True whenever the phantom is out — live (possessed) or planted (frozen).</summary>
+        /// <summary>True while the phantom is out at the arrow, awaiting the release.</summary>
         public bool Active { get; private set; }
-        /// <summary>True once control has been handed back to Nix and Eko is standing frozen with a
-        /// held aim, waiting for Nix's L1 to loose. False while the player is driving Eko directly.</summary>
-        public bool Frozen { get; private set; }
-        /// <summary>Eko is always considered to have an arrow ready — Eko fires its own blues.</summary>
-        public bool Prepared => Active;
-        /// <summary>The current aim direction (unit vector). Live-updated from input while the
-        /// player controls Eko; held frozen once control hands back.</summary>
-        public Vector2 AimDirection { get; private set; } = Vector2.right;
-        /// <summary>Has the player actually aimed Eko at any point during this possession? False
-        /// means the phantom is planted with the default direction — Nix's L1 dismisses instead
-        /// of firing in that case, so a summon-and-return-without-aiming cleans up quietly.</summary>
-        public bool HasAim { get; private set; }
 
-        LayerMask _mask;
-        int _aimSector;
-        bool _snapNow;
-        bool _aimFromStickLast;
-        Camera _cam;
+        /// <summary>Aim written by <see cref="EkoSummoner"/> each frame; consumed by
+        /// <see cref="Loose"/> at fire time.</summary>
+        public Vector2 AimDirection { get; set; } = Vector2.right;
 
-        void Awake()
-        {
-            HideAimUI();
-        }
+        void Awake() => HideAimUI();
 
         // ------------------------------------------------------------------ lifecycle
-        /// <summary>Plant the phantom at <paramref name="position"/>, facing <paramref name="facing"/>,
-        /// and switch it on in the live (player-controlled) state. Aim starts at the facing direction
-        /// and gets updated each frame from Eko's own input reader.</summary>
-        public void Summon(Vector3 position, int facing, LayerMask groundMask)
+        public void Summon(Vector3 position, int facing)
         {
             transform.position = position;
-            _mask = groundMask;
-            Frozen = false;
-            HasAim = false;
             AimDirection = new Vector2(facing >= 0 ? 1 : -1, 0f);
-            _aimSector = facing >= 0 ? 0 : 4;
-            _snapNow = false;
-            _aimFromStickLast = false;
 
             if (sprite != null)
             {
                 sprite.enabled = true;
                 sprite.sortingOrder = PhantomSortingOrder;
                 if (sprite.sprite == null) sprite.sprite = ArcherSprites.IdleFrames[0];
-                sprite.color = liveTint;
+                sprite.color = phantomTint;
 
                 float mag = Mathf.Abs(sprite.transform.localScale.x);
                 if (mag < 0.01f) mag = 1f;
@@ -135,46 +81,17 @@ namespace NixAndEko.Combat
             Sfx.Play(Sfx.Id.EkoSpawn);
         }
 
-        /// <summary>The player let go of Eko (L1) — freeze it exactly where it is, preserving the
-        /// current aim, so Nix can now fire it (or dismiss it) with another L1. Also stops the
-        /// phantom's controller ticking so the aim stays anchored on a stable spot.</summary>
-        public void FreezeInPlace()
-        {
-            if (!Active) return;
-            Frozen = true;
-            if (ekoPlayer != null) ekoPlayer.SetFrozen(true);
-            if (sprite != null) sprite.color = frozenTint;
-        }
-
-        /// <summary>Overwrite the held aim directly — used when reforming a planted phantom after
-        /// a fetch trip, so the aim it had before the trip is exactly what it holds after.
-        /// Updates the sticky 8-way sector so a later un-freeze into live control won't jitter.</summary>
-        public void OverrideAim(Vector2 dir, bool hasAim)
-        {
-            if (dir.sqrMagnitude > 0.0001f) AimDirection = dir.normalized;
-            HasAim = hasAim;
-
-            // Sync the sector so live aim (if the phantom is possessed again later) picks up here.
-            float angle = Mathf.Atan2(AimDirection.y, AimDirection.x) * Mathf.Rad2Deg;
-            int nearest = Mathf.RoundToInt(angle / 45f);
-            _aimSector = ((nearest % 8) + 8) % 8;
-        }
-
-        /// <summary>Dismiss with no visual effect. Used after Vanish / DismissWithOrb / Loose have
-        /// already fired whatever they need — this just retires the GameObject cleanly.</summary>
         public void Dismiss()
         {
             if (ekoPlayer != null) ekoPlayer.SetFrozen(false);
             Active = false;
-            Frozen = false;
-            HasAim = false;
             HideAimUI();
             if (trajectory != null) trajectory.positionCount = 0;
-            HidePassThroughMarkers();
+            // Restore full scale in case a morph tween left us mid-transition.
+            transform.localScale = Vector3.one;
             gameObject.SetActive(false);
         }
 
-        /// <summary>Collapse into a blue orb that zips home to Nix, then dismiss — the clean return.</summary>
         public void DismissWithOrb()
         {
             if (!Active) return;
@@ -184,116 +101,25 @@ namespace NixAndEko.Combat
             Dismiss();
         }
 
-        /// <summary>Eko yanked out of the world on the spot — a burst where they stood, no travel.</summary>
         public void Vanish()
         {
             if (!Active) return;
-            Particle.Burst(transform.position, liveTint, 16, 6f, 0.4f, 0.8f);
+            Particle.Burst(transform.position, phantomTint, 16, 6f, 0.4f, 0.8f);
             Sfx.Play(Sfx.Id.EkoZip, 0.75f);
             Dismiss();
         }
 
-        // ------------------------------------------------------------------ per-frame
+        // ------------------------------------------------------------------ per-frame visuals
         void Update()
         {
             if (!Active || sprite == null) return;
+            if (PauseMenu.IsGameplayPaused) { HideAimUI(); return; }
 
-            // While the pause menu is up, hide Eko's aim UI (reticle + preview line) so the world
-            // reads as frozen. The aim itself is preserved — nothing else runs — so resuming picks
-            // right back up where it left off.
-            if (NixAndEko.Environment.PauseMenu.IsGameplayPaused)
-            {
-                HideAimUI();
-                return;
-            }
-
-            // Live: aim from input, updated each frame. Frozen: aim held, no input read.
-            if (!Frozen) UpdateLiveAim();
-
+            if (sprite.color != phantomTint) sprite.color = phantomTint;
             UpdateAimIndicator();
             UpdatePreview();
-
-            // Keep the tint stable in case something knocked it off (a scene rebuild etc.).
-            Color desired = Frozen ? frozenTint : liveTint;
-            if (sprite.color != desired) sprite.color = desired;
         }
 
-        // ------------------------------------------------------------------ aim
-        /// <summary>Read the aim stick / mouse and snap the aim to the nearest 8-way sector, with
-        /// hysteresis so it doesn't flicker at boundaries — same shape as <see cref="Bow"/>'s
-        /// aim resolution, so the two behave identically.</summary>
-        void UpdateLiveAim()
-        {
-            if (ekoInput == null) return;
-
-            bool aimingNow = ekoInput.AimStickActive || ekoInput.MouseAiming;
-            if (aimingNow) HasAim = true;
-
-            Vector2 raw = GetRawAim();
-            AimDirection = eightDirectional ? SnapEight(raw) : (raw.sqrMagnitude > 0.0001f ? raw.normalized : AimDirection);
-
-            // Eko's move-facing (state machine sets it from move input) fights the aim otherwise —
-            // face the aim direction whenever it's meaningfully horizontal, same as Bow does for Nix.
-            if (ekoPlayer != null && Mathf.Abs(AimDirection.x) > 0.1f)
-                ekoPlayer.SetFacing(AimDirection.x > 0 ? 1 : -1);
-        }
-
-        Vector2 GetRawAim()
-        {
-            if (ekoInput.AimStickActive)
-            {
-                if (!_aimFromStickLast) _snapNow = true;
-                _aimFromStickLast = true;
-                return ekoInput.AimStickDirection;
-            }
-            _aimFromStickLast = false;
-
-            if (ekoInput.MouseAiming && Mouse.current != null)
-            {
-                if (_cam == null) _cam = Camera.main;
-                if (_cam != null)
-                {
-                    Vector3 mp = Mouse.current.position.ReadValue();
-                    mp.z = -_cam.transform.position.z;
-                    Vector3 world = _cam.ScreenToWorldPoint(mp);
-                    Vector2 d = (Vector2)(world - transform.position);
-                    if (d.sqrMagnitude > 0.0001f) return d;
-                }
-            }
-
-            int f = ekoPlayer != null ? ekoPlayer.Facing : 1;
-            return new Vector2(f, 0f);
-        }
-
-        Vector2 SnapEight(Vector2 dir)
-        {
-            if (dir.sqrMagnitude < 0.0001f) return SectorToDir(_aimSector);
-
-            if (_snapNow)
-            {
-                _snapNow = false;
-                int nearest = Mathf.RoundToInt(Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg / 45f);
-                _aimSector = ((nearest % 8) + 8) % 8;
-                return SectorToDir(_aimSector);
-            }
-
-            float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
-            float fromCurrent = Mathf.DeltaAngle(_aimSector * 45f, angle);
-            if (Mathf.Abs(fromCurrent) > 22.5f + aimHysteresis)
-            {
-                int nearest = Mathf.RoundToInt(angle / 45f);
-                _aimSector = ((nearest % 8) + 8) % 8;
-            }
-            return SectorToDir(_aimSector);
-        }
-
-        static Vector2 SectorToDir(int sector)
-        {
-            float rad = sector * 45f * Mathf.Deg2Rad;
-            return new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)).normalized;
-        }
-
-        // ------------------------------------------------------------------ visuals
         void UpdateAimIndicator()
         {
             if (aimIndicator == null) return;
@@ -309,48 +135,19 @@ namespace NixAndEko.Combat
             if (trajectory != null) trajectory.positionCount = 0;
         }
 
-        /// <summary>Redraw the shot preview. A straight arrow needs no arc simulation — one raycast
-        /// (walking through one-ways that would pass clean through, marking the crossings) gives
-        /// the exact flight path and the surface it stops on.</summary>
         void UpdatePreview()
         {
             if (trajectory == null) return;
 
             Vector2 origin = transform.position;
-            Vector2 end = origin + AimDirection * previewDistance;
-            int markerCount = 0;
+            Vector2 end    = origin + AimDirection * previewDistance;
 
-            if (_mask.value != 0)
+            LayerMask mask = ekoPlayer != null ? ekoPlayer.groundMask : default;
+            if (mask.value != 0)
             {
-                Vector2 castOrigin = origin;
-                float remaining = previewDistance;
-                Collider2D lastPassThrough = null;
-
-                for (int i = 0; i < 8 && remaining > 0.01f; i++)
-                {
-                    var hit = Physics2D.Raycast(castOrigin, AimDirection, remaining, _mask);
-                    if (hit.collider == null) break;
-
-                    if (OneWayPlatform.Blocks(hit))
-                    {
-                        end = hit.point;
-                        break;
-                    }
-
-                    if (hit.collider != lastPassThrough &&
-                        passThroughMarkers != null && markerCount < passThroughMarkers.Length)
-                    {
-                        ShowPassThroughMarker(markerCount++, hit.point);
-                        lastPassThrough = hit.collider;
-                    }
-
-                    float advanced = Vector2.Distance(castOrigin, hit.point) + 0.05f;
-                    castOrigin += AimDirection * advanced;
-                    remaining -= advanced;
-                }
+                var hit = Physics2D.Raycast(origin, AimDirection, previewDistance, mask);
+                if (hit.collider != null) end = hit.point;
             }
-
-            HidePassThroughMarkers(markerCount);
 
             trajectory.positionCount = 2;
             trajectory.SetPosition(0, origin);
@@ -359,30 +156,8 @@ namespace NixAndEko.Combat
             trajectory.endColor = new Color(previewColor.r, previewColor.g, previewColor.b, 0f);
         }
 
-        void ShowPassThroughMarker(int index, Vector2 pos)
-        {
-            if (passThroughMarkers == null || index >= passThroughMarkers.Length) return;
-            Transform m = passThroughMarkers[index];
-            if (m == null) return;
-            m.gameObject.SetActive(true);
-            m.position = pos;
-        }
-
-        void HidePassThroughMarkers(int fromIndex = 0)
-        {
-            if (passThroughMarkers == null) return;
-            for (int i = fromIndex; i < passThroughMarkers.Length; i++)
-                if (passThroughMarkers[i] != null) passThroughMarkers[i].gameObject.SetActive(false);
-        }
-
         // ------------------------------------------------------------------ firing
-        /// <summary>Loose the held shot along the current aim. <paramref name="nixCol"/> is Nix's
-        /// collider, registered as the arrow's catch target so the shot can find her without
-        /// physically shoving her — the momentum boost is applied deliberately on catch (see
-        /// <see cref="EkoArrowTarget"/>). Straight and gravity-free by default; when
-        /// <paramref name="homeTarget"/> is set (auto-aim — Nix was on the preview line at release),
-        /// the arrow curves to her and phases through everything else so it always lands.</summary>
-        public Arrow Loose(float speed, Collider2D nixCol, Transform homeTarget = null)
+        public Arrow Loose(float speed, Collider2D nixCol)
         {
             if (arrowPrefab == null)
             {
@@ -393,52 +168,27 @@ namespace NixAndEko.Combat
             Quaternion rot = Quaternion.FromToRotation(Vector3.right, AimDirection);
             Arrow arrow = Instantiate(arrowPrefab, transform.position, rot);
             arrow.gameObject.SetActive(true);
-
             arrow.flyStraight = true;
             arrow.isEkoArrow = true;
-            arrow.blue = true;                // Eko's arrows read blue
+            arrow.blue = true;
             arrow.ekoAim = AimDirection;
             arrow.SetCatchTarget(nixCol);
-            if (homeTarget != null) arrow.HomeTo(homeTarget);
             arrow.Launch(AimDirection * speed, 1f);
             return arrow;
         }
 
-        /// <summary>
-        /// Nix's own arrow struck the (live or planted) phantom: Eko catches it and orbs it back to
-        /// Nix as a retrieval. The arrow is destroyed on impact — it's now riding the orb — and Nix
-        /// gets it back when the orb lands on her. The phantom collapses into the orb, so a summoned
-        /// Eko is spent by the retrieval (no swap teleport, and no button was pressed for it).
-        /// A quick hitstop still sells the catch.
-        /// </summary>
+        /// <summary>Legacy stub so <see cref="Arrow.Impact"/>'s Frozen branch compiles — under
+        /// this design the phantom is never in a "solid frozen-catch" role.</summary>
+        public bool Frozen => false;
+
+        /// <summary>Legacy: unreachable now. Kept for API parity with <see cref="Arrow.Impact"/>.</summary>
         public void OnNixArrowHit(Arrow arrow)
         {
             if (!Active || player == null || arrow == null) return;
-
             Hitstop.Freeze(CatchHitstop);
-
-            Vector3 from = transform.position;
-            bool wasBlue = arrow.blue;
-
-            // Consume the arrow: it becomes payload for the orb, not a pickup on the ground.
-            // MarkReclaimed silences the safety-net re-grant Arrow.OnDestroy would otherwise fire
-            // — the orb hands one arrow back on arrival; we mustn't grant a second one now.
             arrow.MarkReclaimed();
             Destroy(arrow.gameObject);
-
-            // Phantom is spent — vanish (a burst where it stood) so the orb clearly reads as Eko
-            // itself hand-carrying the arrow home.
             Vanish();
-
-            // Curved-orb chase back to Nix's live position; on arrival, hand the arrow back to
-            // whichever slot it came out of.
-            Bow bow = nixBow;
-            PlayerController nix = player;
-            EkoOrb.Chase(from, () => nix.transform.position, 0.35f, onArrive: () =>
-            {
-                if (bow != null) bow.GiveArrow(wasBlue);
-                Sfx.Play(Sfx.Id.EkoCatch);
-            });
         }
     }
 }

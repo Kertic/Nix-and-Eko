@@ -16,6 +16,7 @@ namespace NixAndEko.Player.States
                 return;
             }
 
+            if (TryAirJump()) return;                                    // banked Eko-catch jump
             if (WantsWallSlide()) { P.Machine.ChangeState(P.WallSlide); return; }
 
             P.FaceMoveInput();

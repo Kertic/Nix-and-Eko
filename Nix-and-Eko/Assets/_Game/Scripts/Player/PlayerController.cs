@@ -121,6 +121,12 @@ namespace NixAndEko.Player
         /// grace window before natural air deceleration kicks in.</summary>
         public float AirTimer;
 
+        /// <summary>Air jumps Nix has banked. Granted by an Eko-arrow catch (see
+        /// <see cref="Combat.EkoArrowTarget"/>); reset to zero whenever she stands on ground.
+        /// Consumed one at a time by the Fall/Jump states' <see cref="States.PlayerStateBase.TryAirJump"/>
+        /// helper — a jump press cashes one in for a fresh JumpLaunchSpeed burst.</summary>
+        public int ExtraJumps;
+
         // --- States ---
         public IdleState Idle { get; private set; }
         public MoveState MoveS { get; private set; }
@@ -307,6 +313,7 @@ namespace NixAndEko.Player
             {
                 AirTimer = 0f;
                 GlideFuel = Config.glideDuration;   // only refills by touching ground
+                ExtraJumps = 0;                     // banked air jumps clear on landing
             }
             else
             {
