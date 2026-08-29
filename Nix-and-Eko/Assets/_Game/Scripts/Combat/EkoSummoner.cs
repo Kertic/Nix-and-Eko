@@ -70,6 +70,10 @@ namespace NixAndEko.Combat
         public bool CanSummon => !_spent;
         /// <summary>True while the player is directly controlling Eko.</summary>
         public bool Possessing => _possessing;
+        /// <summary>True while a fetch orb is currently in flight (out to grab Nix's arrow, or
+        /// coming back). Consumed by <see cref="Player.PlayerVisuals"/> to hide the head-orbit
+        /// Eko ball while the phantom is out doing the retrieval.</summary>
+        public bool Fetching => _fetching;
 
         bool _spent;
         bool _possessing;

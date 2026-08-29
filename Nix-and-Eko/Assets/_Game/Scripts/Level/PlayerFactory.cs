@@ -38,6 +38,23 @@ namespace NixAndEko.Level
             sr.sortingOrder = 10;
             sr.sprite = ArcherSprites.IdleFrames[0];
 
+            // A visible arrow held ready in her draw hand — only enabled while Bow.HasAnyArrow.
+            // Sits in FRONT of Nix so it reads on top of the tunic. Tinted blue while she's
+            // wielding one of Eko's blue arrows.
+            var arrowHeldGo = new GameObject("HeldArrow");
+            arrowHeldGo.transform.SetParent(spriteGo.transform, false);
+            // Small, offset toward her draw hand and tilted so it reads as an arrow ready to
+            // nock — not a projectile.
+            arrowHeldGo.transform.localPosition = new Vector3(0.16f, 0.06f, 0f);
+            arrowHeldGo.transform.localRotation = Quaternion.Euler(0f, 0f, 65f);
+            arrowHeldGo.transform.localScale    = Vector3.one * 0.6f;
+            var arrowHeldSr = arrowHeldGo.AddComponent<SpriteRenderer>();
+            arrowHeldSr.sortingOrder = 12;                                 // in front of Nix
+            arrowHeldSr.sprite = SpriteFactory.Arrow(new Color(0.55f, 0.4f, 0.28f),  // shaft
+                                                    new Color(0.93f, 0.95f, 1f),    // head + fletch
+                                                    14, 5);
+            arrowHeldSr.enabled = false;   // PlayerVisuals turns it on when an arrow is in hand
+
             var controller = go.AddComponent<PlayerController>();
             controller.config = config;
             controller.spriteRoot = spriteGo.transform;
@@ -97,6 +114,35 @@ namespace NixAndEko.Level
             var ekoTarget = go.AddComponent<EkoArrowTarget>();
             ekoTarget.bow = bow;
             ekoTarget.player = controller;
+
+            // A tiny blue orb — the SAME ball form Eko takes while zipping around on retrievals
+            // (see EkoOrb.NewOrb): an 8x8 blue solid rect at 0.5 world scale — so a bystander
+            // reading the phantom-at-rest and the phantom-in-transit sees one consistent shape.
+            // Parented under the player root (NOT spriteRoot) so its orbit isn't mirrored by the
+            // facing flip. PlayerVisuals drives its position and toggles it off while Eko is
+            // deployed or busy fetching.
+            var ekoBallGo = new GameObject("EkoBall");
+            ekoBallGo.transform.SetParent(go.transform, false);
+            ekoBallGo.transform.localScale = Vector3.one * 0.5f;
+            var ekoBallSr = ekoBallGo.AddComponent<SpriteRenderer>();
+            ekoBallSr.sortingOrder = 25;                                    // matches EkoOrb
+            var ekoBlue = new Color(0.4f, 0.72f, 1f, 0.95f);                // matches EkoOrb.Blue
+            ekoBallSr.sprite = SpriteFactory.SolidCircle(ekoBlue, 8, ekoBlue);
+            ekoBallSr.color = ekoBlue;
+            ekoBallSr.enabled = false;                                      // PlayerVisuals wakes it
+
+            // Non-locomotion visual accents: the little Eko orb hovering around her head while
+            // the phantom is with her, and the physical arrow she carries while HasAnyArrow.
+            var visuals = go.AddComponent<PlayerVisuals>();
+            visuals.player = controller;
+            visuals.bow = bow;
+            visuals.eko = eko;
+            visuals.summoner = summoner;
+            visuals.mainSprite = sr;
+            visuals.ekoBall = ekoBallGo.transform;
+            visuals.ekoBallRenderer = ekoBallSr;
+            visuals.ekoBallColor = ekoBlue;
+            visuals.heldArrowRenderer = arrowHeldSr;
 
             go.SetActive(true);   // everything is wired; let the components wake
             return controller;

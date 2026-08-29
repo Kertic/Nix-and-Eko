@@ -54,7 +54,10 @@ namespace NixAndEko.Util
             var style = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold };
             style.normal.textColor = Color.white;
 
-            GUILayout.BeginArea(new Rect(10, 10, 500, 290), GUI.skin.box);
+            // Anchored to the right so the top-left stays clear for the always-on player HUD
+            // (health bar + Eko-presence indicator). 10 px margin from the right edge.
+            const float w = 500f, h = 290f;
+            GUILayout.BeginArea(new Rect(Screen.width - w - 10f, 10f, w, h), GUI.skin.box);
             if (health != null) GUILayout.Label($"HP: {health.Current}", style);
             if (player != null) GUILayout.Label($"State: {player.currentState}", style);
             if (bow != null)

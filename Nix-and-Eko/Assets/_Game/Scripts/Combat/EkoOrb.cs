@@ -50,7 +50,7 @@ namespace NixAndEko.Combat
 
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingOrder = 25;
-            sr.sprite = SpriteFactory.SolidRect(Blue, 8, 8, Blue);
+            sr.sprite = SpriteFactory.SolidCircle(Blue, 8, Blue);
             sr.color = Blue;
             Particle.Burst(from, Blue, 8, 5f, 0.3f, 0.5f);
             Sfx.Play(Sfx.Id.EkoZip, 1f, 0.7f);

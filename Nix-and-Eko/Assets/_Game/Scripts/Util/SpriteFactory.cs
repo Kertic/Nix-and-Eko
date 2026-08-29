@@ -82,6 +82,27 @@ namespace NixAndEko.Util
             return ToSprite(tex);   // center pivot → symmetric shrink
         }
 
+        /// <summary>A filled circle — anti-aliased at the edge by keeping the ring boundary crisp
+        /// at Point filtering and dropping any pixel whose centre is outside the radius. Used for
+        /// the Eko-ball and its trail particles so both read as round blue orbs, not pixel dice.</summary>
+        public static Sprite SolidCircle(Color fill, int pixels = 8, Color? border = null)
+        {
+            var tex = NewTex(pixels, pixels);
+            Vector2 c = new Vector2((pixels - 1) / 2f, (pixels - 1) / 2f);
+            float r = pixels * 0.5f;
+            Color b = border ?? fill;
+            for (int y = 0; y < pixels; y++)
+            for (int x = 0; x < pixels; x++)
+            {
+                float d = Vector2.Distance(new Vector2(x, y), c);
+                if (d > r) tex.SetPixel(x, y, Color.clear);
+                else if (d > r - 1f) tex.SetPixel(x, y, b);
+                else tex.SetPixel(x, y, fill);
+            }
+            tex.Apply();
+            return ToSprite(tex);
+        }
+
         /// <summary>A hollow circle outline — used to mark where a drag gesture started.</summary>
         public static Sprite Circle(Color stroke, int pixels = 16, float thickness = 0.22f)
         {

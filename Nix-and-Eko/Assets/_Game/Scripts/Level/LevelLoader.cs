@@ -69,6 +69,7 @@ namespace NixAndEko.Level
                 player = PlayerFactory.Build(playerConfig, inputActions, groundLayer,
                     arrow, spawn, transform, killY);
 
+                AddPlayerHud(player);
                 if (spawnDebugHud) AddDebugHud(player);
                 if (spawnMap) AddMap(player);
             }
@@ -138,6 +139,20 @@ namespace NixAndEko.Level
             hud.player = player;
             hud.health = player.GetComponent<NixAndEko.Environment.Health>();
             hud.bow = player.GetComponentInChildren<Bow>();
+        }
+
+        /// <summary>Always-on top-left HUD: health bar + Eko-presence indicator. Unlike the
+        /// debug HUD it isn't togglable — the health readout and the "is Eko with me?" tell
+        /// are core UI, not a debug overlay.</summary>
+        void AddPlayerHud(PlayerController player)
+        {
+            var hudGo = new GameObject("PlayerHUD");
+            hudGo.transform.SetParent(transform, false);
+            var hud = hudGo.AddComponent<PlayerHud>();
+            hud.player = player;
+            hud.health = player.GetComponent<NixAndEko.Environment.Health>();
+            hud.summoner = player.GetComponent<NixAndEko.Combat.EkoSummoner>();
+            hud.eko = hud.summoner != null ? hud.summoner.eko : null;
         }
 
         /// <summary>
