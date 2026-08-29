@@ -294,6 +294,8 @@ namespace NixAndEko.Environment
             BlockType.BreakableWall => Palette.Breakable,
             BlockType.EnemyWalker => new Color(0.75f, 0.5f, 0.9f),
             BlockType.EnemySlammer => new Color(1f, 0.5f, 0.5f),
+            BlockType.Sign => new Color(0f, 0f, 0f, 0f),   // signs are text-only; hide on the map
+            BlockType.Door => new Color(0.35f, 0.75f, 1f, 1f),   // Eko-blue portal, matches the in-world tint
             _ => new Color(0.55f, 0.42f, 0.30f),   // ground: warm earth, readable on the dark panel
         };
     }

@@ -53,6 +53,8 @@ namespace NixAndEko.Level
                         break;
                     case BlockType.EnemyWalker: CreateEnemyWalker(b, root, groundLayer); break;
                     case BlockType.EnemySlammer: CreateEnemySlammer(b, root); break;
+                    case BlockType.Sign: CreateSign(b, root); break;
+                    case BlockType.Door: CreateDoor(b, root); break;
                 }
             }
 
@@ -239,6 +241,46 @@ namespace NixAndEko.Level
             health.bar = barGo.AddComponent<EnemyHealthBar>();
 
             return (go, sr);
+        }
+
+        /// <summary>Trigger portal that teleports the player to the block's <see cref="LevelBlock.target"/>.
+        /// Drawn as a blue runestone archway so it reads as a door, distinct from the earthy gates
+        /// switches drop. Trigger collider matches the block's bounds so any part of Nix that
+        /// crosses the archway fires the teleport.</summary>
+        static void CreateDoor(LevelBlock b, Transform parent)
+        {
+            var go = new GameObject("Door");
+            go.transform.SetParent(parent, false);
+            go.transform.position = b.position;
+
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sortingOrder = 4;
+
+            var ps = go.AddComponent<ProceduralSprite>();
+            ps.shape = ProceduralSprite.Shape.Runestone;
+            ps.primary = new Color(0.35f, 0.75f, 1f);       // Eko-blue so it reads as a portal, not a gate
+            ps.secondary = new Color(0.15f, 0.4f, 0.7f);
+            ps.tiledSize = b.size;
+            ps.Rebuild();
+
+            var col = go.AddComponent<BoxCollider2D>();
+            col.size = b.size;
+            col.isTrigger = true;
+
+            var door = go.AddComponent<Door>();
+            door.target = b.target;
+        }
+
+        /// <summary>Invisible marker whose only job is to host a <see cref="NixAndEko.Util.RoomSign"/>
+        /// that draws the block's <see cref="LevelBlock.note"/> as floating world-space text. No
+        /// collider, no sprite — the label alone is the payload.</summary>
+        static void CreateSign(LevelBlock b, Transform parent)
+        {
+            var go = new GameObject("Sign");
+            go.transform.SetParent(parent, false);
+            go.transform.position = b.position;
+            var sign = go.AddComponent<NixAndEko.Util.RoomSign>();
+            sign.text = b.note;
         }
 
         static void CreateEnemyWalker(LevelBlock b, Transform parent, int groundLayer)

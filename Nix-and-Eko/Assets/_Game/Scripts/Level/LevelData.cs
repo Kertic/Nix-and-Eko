@@ -17,6 +17,14 @@ namespace NixAndEko.Level
         BreakableWall,
         EnemyWalker,
         EnemySlammer,
+        /// <summary>Invisible marker that draws a floating <see cref="LevelBlock.note"/> label
+        /// in-world (via <c>NixAndEko.Util.RoomSign</c>). Used by tutorial levels for tips like
+        /// "Hold LMB, drag, release to fire" so the mechanic is legible without a manual.</summary>
+        Sign,
+        /// <summary>Trigger portal that teleports the player to <see cref="LevelBlock.target"/>
+        /// on entry. Used by the tutorial level to move between self-contained rooms without
+        /// stitching them into one big walkable strip.</summary>
+        Door,
     }
 
     /// <summary>One placed block. Only the fields relevant to <see cref="type"/> are used.</summary>
@@ -40,6 +48,12 @@ namespace NixAndEko.Level
 
         [Tooltip("Gate: local offset applied when open.")]
         public Vector2 openOffset = new Vector2(0f, 4.5f);
+
+        [Tooltip("Sign: the label text drawn floating in-world above the block's position.")]
+        [TextArea] public string note;
+
+        [Tooltip("Door: world position the player is teleported to when they walk into it.")]
+        public Vector2 target;
 
         public LevelBlock Clone() => (LevelBlock)MemberwiseClone();
 
@@ -72,6 +86,8 @@ namespace NixAndEko.Level
             BlockType.BreakableWall => new Vector2(1.2f, 3f),
             BlockType.EnemyWalker => new Vector2(0.9f, 1f),
             BlockType.EnemySlammer => new Vector2(1f, 0.9f),
+            BlockType.Sign => new Vector2(1f, 1f),
+            BlockType.Door => new Vector2(1.5f, 3f),
             _ => new Vector2(4f, 1f),
         };
 
